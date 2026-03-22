@@ -32,6 +32,16 @@ async def _target_folder(db: AsyncSession, content_type: ContentType, explicit_d
         return explicit_destination
     if content_type == ContentType.book:
         return await get_setting(db, "cwa_ingest_folder", "")
+    if content_type == ContentType.comic:
+        comic_folder = await get_setting(db, "comic_ingest_folder", "")
+        if comic_folder:
+            return comic_folder
+        return await get_setting(db, "komga_ingest_folder", "")
+    if content_type == ContentType.manga:
+        manga_folder = await get_setting(db, "manga_ingest_folder", "")
+        if manga_folder:
+            return manga_folder
+        return await get_setting(db, "komga_ingest_folder", "")
     return await get_setting(db, "komga_ingest_folder", "")
 
 

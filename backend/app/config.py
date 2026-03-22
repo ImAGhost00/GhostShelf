@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     # Folder used for comics/manga files that Komga scans
     komga_ingest_folder: str = ""
 
+    # Optional split ingest folders by content type
+    comic_ingest_folder: str = ""
+    manga_ingest_folder: str = ""
+
     # Komga settings
     komga_url: str = ""
     komga_username: str = ""
@@ -39,6 +43,11 @@ class Settings(BaseSettings):
     # Prowlarr settings
     prowlarr_url: str = ""
     prowlarr_api_key: str = ""
+
+    # qBittorrent settings
+    qbittorrent_url: str = ""
+    qbittorrent_username: str = ""
+    qbittorrent_password: str = ""
 
     @property
     def cors_origins_list(self) -> list[str]:

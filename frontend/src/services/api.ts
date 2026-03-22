@@ -96,6 +96,12 @@ export const startProwlarrAutoDownload = (data: {
   watchlist_id?: number;
 }) => request('/downloads/prowlarr/auto', { method: 'POST', body: JSON.stringify(data) });
 
+export const startSmartAutoDownload = (data: {
+  title: string;
+  content_type: ContentType;
+  watchlist_id?: number;
+}) => request('/downloads/auto', { method: 'POST', body: JSON.stringify(data) });
+
 export const updateDownloadStatus = (id: number, status: string): Promise<DownloadItem> =>
   request(`/downloads/${id}/status?status=${status}`, { method: 'PATCH' });
 
@@ -110,6 +116,7 @@ export const scanKomgaLibrary = (id: string) => request(`/integrations/komga/lib
 export const getCwaStatus = () => request<{ connected: boolean; error?: string; ingest_folder?: string }>('/integrations/cwa/status');
 export const getCwaInfo = () => request<{ cwa_url: string; ingest_folder: string; configured: boolean }>('/integrations/cwa/info');
 export const getProwlarrStatus = () => request<{ connected: boolean; error?: string; version?: string }>('/integrations/prowlarr/status');
+export const getQbittorrentStatus = () => request<{ connected: boolean; error?: string; version?: string }>('/integrations/qbittorrent/status');
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 

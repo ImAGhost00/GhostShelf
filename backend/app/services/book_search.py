@@ -9,10 +9,9 @@ from __future__ import annotations
 
 import httpx
 from typing import Any
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
-
-settings = get_settings()
+from app.services.settings_store import get_setting
 
 
 # ─── schema ──────────────────────────────────────────────────────────────────
@@ -74,11 +73,12 @@ async def _search_open_library(query: str, limit: int) -> list[dict]:
 
 # ─── Google Books ─────────────────────────────────────────────────────────────
 
-async def _search_google_books(query: str, limit: int) -> list[dict]:
+async def _search_google_books(db: AsyncSession, query: str, limit: int) -> list[dict]:
     url = "https://www.googleapis.com/books/v1/volumes"
     params: dict[str, Any] = {"q": query, "maxResults": min(limit, 40), "printType": "books"}
-    if settings.google_books_api_key:
-        params["key"] = settings.google_books_api_key
+    google_books_api_key = await get_setting(db, "google_books_api_key", "")
+    if google_books_api_key:
+        params["key"] = google_books_api_key
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(url, params=params)
         resp.raise_for_status()
@@ -115,7 +115,7 @@ async def _search_google_books(query: str, limit: int) -> list[dict]:
 
 # ─── public entry point ───────────────────────────────────────────────────────
 
-async def search_books(query: str, source: str = "all", limit: int = 20) -> list[dict]:
+async def search_books(db: AsyncSession, query: str, source: str = "all", limit: int = 20) -> list[dict]:
     """
     Search books. source may be 'open_library', 'google_books', or 'all'.
     """
@@ -126,7 +126,7 @@ async def search_books(query: str, source: str = "all", limit: int = 20) -> list
     if source == "open_library":
         return await _search_open_library(query, limit)
     if source == "google_books":
-        return await _search_google_books(query, limit)
+        return await _search_google_books(db, query, limit)
 
     # "all" — merge, deduplicate by title similarity (simple approach: keep both)
     ol, gb = [], []
@@ -135,7 +135,7 @@ async def search_books(query: str, source: str = "all", limit: int = 20) -> list
     except Exception:
         pass
     try:
-        gb = await _search_google_books(query, limit // 2 or 10)
+        gb = await _search_google_books(db, query, limit // 2 or 10)
     except Exception:
         pass
     return ol + gb

@@ -16,6 +16,8 @@ ALLOWED_KEYS = {
     "cwa_url",
     "cwa_ingest_folder",
     "komga_ingest_folder",
+    "comic_ingest_folder",
+    "manga_ingest_folder",
     "komga_url",
     "komga_username",
     "komga_password",
@@ -23,6 +25,9 @@ ALLOWED_KEYS = {
     "comicvine_api_key",
     "prowlarr_url",
     "prowlarr_api_key",
+    "qbittorrent_url",
+    "qbittorrent_username",
+    "qbittorrent_password",
 }
 
 

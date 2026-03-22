@@ -34,7 +34,10 @@ const HomePage: React.FC = () => {
   return (
     <>
       <div className="page-header">
-        <h1>👻 GhostShelf</h1>
+        <h1 className="brand-title">
+          <img src="/logo/Ghost-Only.png" alt="GhostShelf logo" />
+          <span>GhostShelf</span>
+        </h1>
         <p>Your unified library tracker for books, comics &amp; manga</p>
       </div>
 

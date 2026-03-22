@@ -6,17 +6,7 @@ services:
     environment:
       - DEBUG=${DEBUG:-false}
       - DATABASE_URL=sqlite+aiosqlite:////data/ghostshelf.db
-      - CORS_ORIGINS=http://localhost:3000,http://frontend
-      - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
-      - COMICVINE_API_KEY=${COMICVINE_API_KEY:-}
-      - CWA_URL=${CWA_URL:-}
-      - CWA_INGEST_FOLDER=${CWA_INGEST_FOLDER:-}
-      - KOMGA_INGEST_FOLDER=${KOMGA_INGEST_FOLDER:-}
-      - KOMGA_URL=${KOMGA_URL:-}
-      - KOMGA_USERNAME=${KOMGA_USERNAME:-}
-      - KOMGA_PASSWORD=${KOMGA_PASSWORD:-}
-      - PROWLARR_URL=${PROWLARR_URL:-}
-      - PROWLARR_API_KEY=${PROWLARR_API_KEY:-}
+      - CORS_ORIGINS=http://localhost:4140,http://frontend
     volumes:
       - ghostshelf-data:/data
     ports:
@@ -32,7 +22,7 @@ services:
     container_name: ghostshelf-frontend
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "4140:80"
     depends_on:
       - backend
 

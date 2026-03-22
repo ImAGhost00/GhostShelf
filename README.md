@@ -31,13 +31,16 @@ cd ghostshelf
 
 # 2. Set up environment
 cp .env.example .env
-#    → edit .env with your Komga/CWA settings
+#    → optional: edit DEBUG/CORS/database values
 
 # 3. Start GhostShelf
 docker compose up -d
 
-# UI  → http://localhost:3000
+# UI  → http://localhost:4140
 # API → http://localhost:8000/docs
+
+# 4. Configure integrations in the app UI
+#    Settings -> add CWA, Komga, qBittorrent, Prowlarr, and API keys
 ```
 
 ---
@@ -79,15 +82,22 @@ The Vite dev server proxies `/api/*` to `http://localhost:8000`.
 
 ## Configuration
 
-All settings can be changed in the **Settings** page of the UI, or via environment variables / `.env` file.
+Integration settings are managed in the **Settings** page of the UI and persisted in the app database.
+
+Environment variables in `.env` are optional fallback values and are no longer required in `docker-compose.yml`.
 
 | Variable | Description |
 |---|---|
 | `CWA_URL` | Base URL of your Calibre-Web / CWA instance |
 | `CWA_INGEST_FOLDER` | Path to the CWA ingest watch folder |
+| `COMIC_INGEST_FOLDER` | Path for comic downloads |
+| `MANGA_INGEST_FOLDER` | Path for manga downloads |
 | `KOMGA_URL` | Base URL of your Komga instance |
 | `KOMGA_USERNAME` | Komga login email |
 | `KOMGA_PASSWORD` | Komga login password |
+| `QBITTORRENT_URL` | Base URL of your qBittorrent Web UI |
+| `QBITTORRENT_USERNAME` | qBittorrent username |
+| `QBITTORRENT_PASSWORD` | qBittorrent password |
 | `GOOGLE_BOOKS_API_KEY` | *(Optional)* Google Books key for higher quota |
 | `COMICVINE_API_KEY` | ComicVine API key — needed for Western comics search |
 

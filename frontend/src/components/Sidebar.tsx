@@ -18,7 +18,7 @@ const integrations: NavItem[] = [
 const Sidebar: React.FC = () => (
   <aside className="sidebar">
     <div className="sidebar-logo">
-      <span className="logo-icon">👻</span>
+      <img className="logo-icon" src="/logo/Ghost-Only.png" alt="GhostShelf logo" />
       <span className="logo-text">GhostShelf</span>
     </div>
 

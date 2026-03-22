@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { searchBooks, searchComics, addToWatchlist, getWatchlist } from '@/services/api';
+import {
+  searchBooks,
+  searchComics,
+  addToWatchlist,
+  getWatchlist,
+  startSmartAutoDownload,
+} from '@/services/api';
 import ResultCard from '@/components/ResultCard';
 import { useToast } from '@/components/ToastProvider';
 import type { SearchResult, WatchlistItem } from '@/types';
@@ -18,6 +24,7 @@ const SearchPage: React.FC = () => {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [autoId, setAutoId] = useState<string>('');
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -72,6 +79,25 @@ const SearchPage: React.FC = () => {
     watchlist.some(
       w => w.source === item.source && w.source_id === item.source_id,
     );
+
+  const autoKey = (item: SearchResult) => `${item.source}-${item.source_id}-${item.content_type}`;
+
+  const handleAutoDownload = async (item: SearchResult) => {
+    const key = autoKey(item);
+    setAutoId(key);
+    try {
+      await startSmartAutoDownload({
+        title: item.title,
+        content_type: item.content_type,
+      });
+      toast(`Auto-download started for "${item.title}"`, 'success');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Auto-download failed';
+      toast(msg, 'error');
+    } finally {
+      setAutoId('');
+    }
+  };
 
   return (
     <>
@@ -132,6 +158,8 @@ const SearchPage: React.FC = () => {
               key={`${item.source}-${item.source_id}-${idx}`}
               item={item}
               onAdd={handleAdd}
+              onAutoDownload={handleAutoDownload}
+              autoDownloading={autoId === autoKey(item)}
               alreadyAdded={isAdded(item)}
             />
           ))}

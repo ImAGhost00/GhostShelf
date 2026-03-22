@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models.models import DownloadItem, ContentType
 from app.services.download_service import start_direct_download
 from app.services.prowlarr_service import search_releases
+from app.services.smart_download_service import find_direct_urls
 
 router = APIRouter(prefix="/downloads", tags=["downloads"])
 
@@ -32,6 +33,13 @@ class DirectDownloadRequest(BaseModel):
 
 
 class ProwlarrAutoRequest(BaseModel):
+    title: str
+    content_type: ContentType
+    watchlist_id: Optional[int] = None
+    destination: Optional[str] = None
+
+
+class SmartAutoRequest(BaseModel):
     title: str
     content_type: ContentType
     watchlist_id: Optional[int] = None
@@ -134,6 +142,63 @@ async def prowlarr_auto(body: ProwlarrAutoRequest, db: AsyncSession = Depends(ge
     return {
         "release": chosen,
         "download": result,
+    }
+
+
+@router.post("/auto", status_code=201)
+async def smart_auto_download(body: SmartAutoRequest, db: AsyncSession = Depends(get_db)):
+    """Workflow: try Anna's Archive / Libgen first, fallback to Prowlarr indexers."""
+    direct_attempt_error: str | None = None
+
+    direct_candidates = await find_direct_urls(body.title, body.content_type)
+    if direct_candidates:
+        primary = direct_candidates[0]
+        mirrors = [c["url"] for c in direct_candidates[1:6]]
+        direct = await start_direct_download(
+            db=db,
+            title=body.title,
+            content_type=body.content_type,
+            download_url=primary["url"],
+            mirror_urls=mirrors,
+            watchlist_id=body.watchlist_id,
+            destination=body.destination,
+        )
+        if direct.get("ok"):
+            return {
+                "strategy": "direct-first",
+                "source": primary.get("source", "direct"),
+                "download": direct,
+                "used_url": primary["url"],
+                "candidate_count": len(direct_candidates),
+            }
+        direct_attempt_error = str(direct.get("error", "Direct source failed"))
+
+    # Fallback to Prowlarr indexer search when direct sources miss/fail.
+    releases = await search_releases(db=db, query=body.title, content_type=body.content_type, limit=25)
+    chosen = next((r for r in releases if str(r.get("downloadUrl", "")).startswith(("http://", "https://"))), None)
+    if not chosen:
+        detail = "No direct source found and no Prowlarr HTTP result found"
+        if direct_attempt_error:
+            detail = f"{detail}. Direct error: {direct_attempt_error}"
+        raise HTTPException(status_code=404, detail=detail)
+
+    fallback = await start_direct_download(
+        db=db,
+        title=body.title,
+        content_type=body.content_type,
+        download_url=chosen["downloadUrl"],
+        watchlist_id=body.watchlist_id,
+        destination=body.destination,
+    )
+    if not fallback.get("ok"):
+        raise HTTPException(status_code=400, detail=fallback.get("error", "Download failed"))
+
+    return {
+        "strategy": "prowlarr-fallback",
+        "source": "prowlarr",
+        "release": chosen,
+        "download": fallback,
+        "direct_candidate_count": len(direct_candidates),
     }
 
 

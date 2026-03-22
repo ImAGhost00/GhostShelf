@@ -10,10 +10,9 @@ from __future__ import annotations
 
 import httpx
 from typing import Any
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
-
-settings = get_settings()
+from app.services.settings_store import get_setting
 
 MANGADEX_BASE = "https://api.mangadex.org"
 COMICVINE_BASE = "https://comicvine.gamespot.com/api"
@@ -116,11 +115,12 @@ async def _search_mangadex(query: str, limit: int) -> list[dict]:
 
 # ─── ComicVine ────────────────────────────────────────────────────────────────
 
-async def _search_comicvine(query: str, limit: int) -> list[dict]:
-    if not settings.comicvine_api_key:
+async def _search_comicvine(db: AsyncSession, query: str, limit: int) -> list[dict]:
+    comicvine_api_key = await get_setting(db, "comicvine_api_key", "")
+    if not comicvine_api_key:
         return []
     params = {
-        "api_key": settings.comicvine_api_key,
+        "api_key": comicvine_api_key,
         "format": "json",
         "query": query,
         "resources": "volume",
@@ -219,6 +219,7 @@ async def _search_anilist(query: str, limit: int) -> list[dict]:
 # ─── public entry point ───────────────────────────────────────────────────────
 
 async def search_comics(
+    db: AsyncSession,
     query: str,
     source: str = "all",
     content_type: str = "all",  # "comic" | "manga" | "all"
@@ -242,7 +243,7 @@ async def search_comics(
     if source == "mangadex" and wanted_manga:
         return await _search_mangadex(query, limit)
     if source == "comicvine" and wanted_comic:
-        return await _search_comicvine(query, limit)
+        return await _search_comicvine(db, query, limit)
     if source == "anilist" and wanted_manga:
         return await _search_anilist(query, limit)
 
@@ -260,7 +261,7 @@ async def search_comics(
             pass
     if wanted_comic:
         try:
-            results += await _search_comicvine(query, per)
+            results += await _search_comicvine(db, query, per)
         except Exception:
             pass
     return results

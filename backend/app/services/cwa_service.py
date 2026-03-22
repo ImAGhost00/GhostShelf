@@ -9,31 +9,34 @@ from __future__ import annotations
 
 import httpx
 from typing import Any
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
+from app.services.settings_store import get_setting
 
-settings = get_settings()
+async def check_connection(db: AsyncSession) -> dict[str, Any]:
+    cwa_url = (await get_setting(db, "cwa_url", "")).rstrip("/")
+    cwa_ingest_folder = await get_setting(db, "cwa_ingest_folder", "")
 
-
-async def check_connection() -> dict[str, Any]:
-    if not settings.cwa_url:
+    if not cwa_url:
         return {"connected": False, "error": "CWA URL not configured"}
-    url = settings.cwa_url.rstrip("/")
+
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(url, follow_redirects=True)
+            resp = await client.get(cwa_url, follow_redirects=True)
             return {
                 "connected": resp.status_code < 500,
                 "status_code": resp.status_code,
-                "ingest_folder": settings.cwa_ingest_folder or "(not set)",
+                "ingest_folder": cwa_ingest_folder or "(not set)",
             }
     except Exception as exc:
         return {"connected": False, "error": str(exc)}
 
 
-def get_ingest_info() -> dict[str, Any]:
+async def get_ingest_info(db: AsyncSession) -> dict[str, Any]:
+    cwa_url = await get_setting(db, "cwa_url", "")
+    ingest_folder = await get_setting(db, "cwa_ingest_folder", "")
     return {
-        "cwa_url": settings.cwa_url or "",
-        "ingest_folder": settings.cwa_ingest_folder or "",
-        "configured": bool(settings.cwa_ingest_folder),
+        "cwa_url": cwa_url,
+        "ingest_folder": ingest_folder,
+        "configured": bool(ingest_folder),
     }

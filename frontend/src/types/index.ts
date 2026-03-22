@@ -55,6 +55,8 @@ export interface AppSettings {
   cwa_url?: string;
   cwa_ingest_folder?: string;
   komga_ingest_folder?: string;
+  comic_ingest_folder?: string;
+  manga_ingest_folder?: string;
   komga_url?: string;
   komga_username?: string;
   komga_password?: string;
@@ -62,4 +64,7 @@ export interface AppSettings {
   comicvine_api_key?: string;
   prowlarr_url?: string;
   prowlarr_api_key?: string;
+  qbittorrent_url?: string;
+  qbittorrent_username?: string;
+  qbittorrent_password?: string;
 }

@@ -94,7 +94,11 @@ input:focus, select:focus, textarea:focus {
   margin-bottom: 0.5rem;
 }
 
-.sidebar-logo .logo-icon { font-size: 1.6rem; }
+.sidebar-logo .logo-icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
 .sidebar-logo .logo-text {
   font-size: 1.2rem;
   font-weight: 700;
@@ -148,6 +152,18 @@ input:focus, select:focus, textarea:focus {
 }
 .page-header h1 { font-size: 1.35rem; font-weight: 700; }
 .page-header p  { font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem; }
+
+.brand-title {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.brand-title img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
 
 .page-body {
   flex: 1;

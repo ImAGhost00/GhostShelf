@@ -1,5 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { getSettings, saveSettings, getCwaStatus, getKomgaStatus, getProwlarrStatus } from '@/services/api';
+import {
+  getSettings,
+  saveSettings,
+  getCwaStatus,
+  getKomgaStatus,
+  getProwlarrStatus,
+  getQbittorrentStatus,
+} from '@/services/api';
 import { useToast } from '@/components/ToastProvider';
 import type { AppSettings } from '@/types';
 
@@ -11,6 +18,7 @@ const SettingsPage: React.FC = () => {
   const [cwaStatus, setCwaStatus] = useState<{ connected: boolean; error?: string } | null>(null);
   const [komgaStatus, setKomgaStatus] = useState<{ connected: boolean; error?: string } | null>(null);
   const [prowlarrStatus, setProwlarrStatus] = useState<{ connected: boolean; error?: string; version?: string } | null>(null);
+  const [qbittorrentStatus, setQbittorrentStatus] = useState<{ connected: boolean; error?: string; version?: string } | null>(null);
 
   useEffect(() => {
     getSettings()
@@ -61,6 +69,16 @@ const SettingsPage: React.FC = () => {
       setProwlarrStatus(r);
     } catch {
       setProwlarrStatus({ connected: false, error: 'Request failed' });
+    }
+  };
+
+  const testQbittorrent = async () => {
+    setQbittorrentStatus(null);
+    try {
+      const r = await getQbittorrentStatus();
+      setQbittorrentStatus(r);
+    } catch {
+      setQbittorrentStatus({ connected: false, error: 'Request failed' });
     }
   };
 
@@ -142,14 +160,34 @@ const SettingsPage: React.FC = () => {
               />
             </div>
             <div className="form-field">
-              <label>Komga Ingest Folder</label>
+              <label>Comic Ingest Folder</label>
+              <input
+                type="text"
+                placeholder="/media/comics/incoming"
+                value={form.comic_ingest_folder ?? ''}
+                onChange={set('comic_ingest_folder')}
+              />
+              <span className="hint">Used for comic downloads. Falls back to shared Komga folder if empty.</span>
+            </div>
+            <div className="form-field">
+              <label>Manga Ingest Folder</label>
+              <input
+                type="text"
+                placeholder="/media/manga/incoming"
+                value={form.manga_ingest_folder ?? ''}
+                onChange={set('manga_ingest_folder')}
+              />
+              <span className="hint">Used for manga downloads. Falls back to shared Komga folder if empty.</span>
+            </div>
+            <div className="form-field">
+              <label>Shared Komga Ingest Folder (Legacy Fallback)</label>
               <input
                 type="text"
                 placeholder="/comics/incoming"
                 value={form.komga_ingest_folder ?? ''}
                 onChange={set('komga_ingest_folder')}
               />
-              <span className="hint">Folder Komga scans for comics/manga files</span>
+              <span className="hint">Optional fallback if comic/manga-specific folders are not set.</span>
             </div>
           </div>
           <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -194,6 +232,51 @@ const SettingsPage: React.FC = () => {
                 {prowlarrStatus.connected
                   ? `Connected${prowlarrStatus.version ? ` (v${prowlarrStatus.version})` : ''}`
                   : prowlarrStatus.error ?? 'Disconnected'}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* qBittorrent */}
+        <div className="settings-section">
+          <h2>🧲 qBittorrent</h2>
+          <div className="settings-grid">
+            <div className="form-field">
+              <label>qBittorrent URL</label>
+              <input
+                type="url"
+                placeholder="http://localhost:8080"
+                value={form.qbittorrent_url ?? ''}
+                onChange={set('qbittorrent_url')}
+              />
+            </div>
+            <div className="form-field">
+              <label>qBittorrent Username</label>
+              <input
+                type="text"
+                placeholder="admin"
+                value={form.qbittorrent_username ?? ''}
+                onChange={set('qbittorrent_username')}
+              />
+            </div>
+            <div className="form-field">
+              <label>qBittorrent Password</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={form.qbittorrent_password ?? ''}
+                onChange={set('qbittorrent_password')}
+              />
+            </div>
+          </div>
+          <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button className="btn btn-ghost btn-sm" onClick={testQbittorrent}>Test Connection</button>
+            {qbittorrentStatus && (
+              <span className={`status-chip ${qbittorrentStatus.connected ? 'connected' : 'disconnected'}`}>
+                <span className="dot" />
+                {qbittorrentStatus.connected
+                  ? `Connected${qbittorrentStatus.version ? ` (v${qbittorrentStatus.version})` : ''}`
+                  : qbittorrentStatus.error ?? 'Disconnected'}
               </span>
             )}
           </div>
