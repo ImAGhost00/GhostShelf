@@ -37,7 +37,7 @@ cp .env.example .env
 docker compose up -d
 
 # UI  → http://localhost:4140
-# API → http://localhost:8000/docs
+# API → http://localhost:8001/docs
 
 # 4. Configure integrations in the app UI
 #    Settings -> add CWA, Komga, qBittorrent, Prowlarr, and API keys
@@ -62,10 +62,10 @@ pip install -r requirements.txt
 # Copy env (optional — defaults work for local dev)
 cp ../.env.example .env
 
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8001
 ```
 
-Interactive API docs: <http://localhost:8000/docs>
+Interactive API docs: <http://localhost:8001/docs>
 
 ### Frontend
 
@@ -76,7 +76,7 @@ npm run dev
 # → http://localhost:5173
 ```
 
-The Vite dev server proxies `/api/*` to `http://localhost:8000`.
+The Vite dev server proxies `/api/*` to `http://localhost:8001`.
 
 ---
 
