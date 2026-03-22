@@ -36,7 +36,7 @@ cp .env.example .env
 # 3. Start GhostShelf
 docker compose up -d
 
-# UI  → http://localhost:4140
+# UI  → http://localhost:4141
 # API → http://localhost:8001/docs
 
 # 4. Configure integrations in the app UI
