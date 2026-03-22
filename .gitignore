@@ -1,0 +1,11 @@
+.env
+ghostshelf.db
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+dist/
+node_modules/
+.vite/
+*.log
