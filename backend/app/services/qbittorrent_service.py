@@ -247,6 +247,7 @@ async def enqueue_download(
     password = await get_setting(db, "qbittorrent_password", "")
     qb_download_folder = await get_setting(db, "qbittorrent_download_folder", "/data/downloads")
     category = await _category_for_content_type(db, content_type)
+    auto_tmm = "true" if category else "false"
     if not base_url:
         return {"ok": False, "error": "qBittorrent URL not configured"}
 
@@ -282,6 +283,7 @@ async def enqueue_download(
                     "savepath": qb_download_folder,
                     "category": category,
                     "tags": _download_tag(download.id),
+                    "autoTMM": auto_tmm,
                 },
             )
             if add_resp.status_code >= 400:
@@ -294,6 +296,7 @@ async def enqueue_download(
             "status": download.status,
             "queued_in": "qbittorrent",
             "category": category,
+            "auto_tmm": category != "",
         }
     except Exception as exc:
         download.status = "failed"
