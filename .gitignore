@@ -1,4 +1,7 @@
 .env
+.env.local
+docker-compose.local.yml
+docker-compose.override.yml
 ghostshelf.db
 __pycache__/
 *.pyc
