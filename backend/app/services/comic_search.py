@@ -309,9 +309,12 @@ async def search_comics(
                 continue
 
             related_releases = [release for release in releases if title_score(title, str(release.get("title", ""))) >= 4]
-            available_sources = list(dict.fromkeys([meta.get("source", "manga"), *("prowlarr",) if related_releases else tuple()]))
+            available_sources = [meta.get("source", "manga")]
+            if related_releases:
+                available_sources.append("prowlarr")
+            available_sources = list(dict.fromkeys(source for source in available_sources if source))
             meta_result = dict(meta)
-            meta_result["available_sources"] = [source for source in available_sources if source]
+            meta_result["available_sources"] = available_sources
             merged_manga[key] = meta_result
 
         for release in releases:
