@@ -1,10 +1,11 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import init_db
-from app.routers import books, comics, watchlist, downloads, integrations, settings as settings_router
+from app.routers import auth, books, comics, watchlist, downloads, integrations, settings as settings_router
+from app.routers.auth import get_current_user
 
 _settings = get_settings()
 
@@ -30,13 +31,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers
-app.include_router(books.router, prefix="/api")
-app.include_router(comics.router, prefix="/api")
-app.include_router(watchlist.router, prefix="/api")
-app.include_router(downloads.router, prefix="/api")
-app.include_router(integrations.router, prefix="/api")
-app.include_router(settings_router.router, prefix="/api")
+# ─── Public routers (no auth required) ───────────────────────────────────
+
+# Auth router must be registered first (login endpoint is public)
+app.include_router(auth.router, prefix="/api")
+
+
+# ─── Protected routers (auth required) ────────────────────────────────────
+
+# These routes require authentication via Authorization header (Bearer token)
+app.include_router(books.router, prefix="/api", dependencies=[Depends(get_current_user)])
+app.include_router(comics.router, prefix="/api", dependencies=[Depends(get_current_user)])
+app.include_router(watchlist.router, prefix="/api", dependencies=[Depends(get_current_user)])
+app.include_router(downloads.router, prefix="/api", dependencies=[Depends(get_current_user)])
+app.include_router(integrations.router, prefix="/api", dependencies=[Depends(get_current_user)])
+app.include_router(settings_router.router, prefix="/api", dependencies=[Depends(get_current_user)])
 
 
 @app.get("/api/health")

@@ -63,13 +63,7 @@ const SettingsPage: React.FC = () => {
     try {
         const r = await testKomgaConnection({
           url: form.komga_url ?? '',
-          username: form.komga_username ?? '',
-          password: form.komga_password ?? '',
-        });
-      setKomgaStatus(r);
-    } catch {
-      setKomgaStatus({ connected: false, error: 'Request failed' });
-    }
+
   };
 
   const testProwlarr = async () => {
@@ -148,6 +142,9 @@ const SettingsPage: React.FC = () => {
         {/* Komga */}
         <div className="settings-section">
           <h2>📚 Komga</h2>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+            Komga is accessed via your Wizarr login. Configure the URL and download folders below.
+          </p>
           <div className="settings-grid">
             <div className="form-field">
               <label>Komga URL</label>
@@ -156,24 +153,6 @@ const SettingsPage: React.FC = () => {
                 placeholder="http://localhost:25600"
                 value={form.komga_url ?? ''}
                 onChange={set('komga_url')}
-              />
-            </div>
-            <div className="form-field">
-              <label>Username / Email</label>
-              <input
-                type="text"
-                placeholder="admin@example.com"
-                value={form.komga_username ?? ''}
-                onChange={set('komga_username')}
-              />
-            </div>
-            <div className="form-field">
-              <label>Password</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={form.komga_password ?? ''}
-                onChange={set('komga_password')}
               />
             </div>
             <div className="form-field">

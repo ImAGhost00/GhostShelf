@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from typing import Optional
 
 from app.services import komga_service, cwa_service, prowlarr_service, qbittorrent_service
+from app.services.settings_store import get_setting
 from app.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends
@@ -22,22 +23,13 @@ async def komga_status(db: AsyncSession = Depends(get_db)):
 
 class KomgaTestRequest(BaseModel):
     url: str = ""
-    username: str = ""
-    password: str = ""
 
 
 @router.post("/komga/test")
 async def komga_test(body: KomgaTestRequest, db: AsyncSession = Depends(get_db)):
-    """Test Komga connection using inline credentials (falls back to DB for masked values)."""
-    from app.services.settings_store import get_setting
+    """Test Komga connection using just URL (Komga auth is via Wizarr)."""
     url = body.url or await get_setting(db, "komga_url", "")
-    username = body.username or await get_setting(db, "komga_username", "")
-    password = (
-        body.password
-        if body.password and body.password != "***"
-        else await get_setting(db, "komga_password", "")
-    )
-    return await komga_service.check_connection_inline(url, username, password)
+    return await komga_service.check_connection_inline(url)
 
 
 @router.get("/komga/libraries")

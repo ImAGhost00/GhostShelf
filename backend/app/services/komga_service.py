@@ -2,6 +2,11 @@
 Komga integration service.
 
 Komga exposes a REST API at http://<host>/api/v1/
+
+When deployed behind Wizarr, Komga users are Wizarr users and authentication
+is handled centrally. GhostShelf connects to Komga's API endpoints without
+separate credentials.
+
 Docs: https://komga.org/docs/api
 """
 from __future__ import annotations
@@ -18,32 +23,27 @@ async def _base_url(db: AsyncSession) -> str:
     return f"{url}/api/v1"
 
 
-async def _auth(db: AsyncSession) -> tuple[str, str] | None:
-    username = await get_setting(db, "komga_username", "")
-    password = await get_setting(db, "komga_password", "")
-    if username and password:
-        return (username, password)
-    return None
-
-
 async def check_connection(db: AsyncSession) -> dict[str, Any]:
+    """Check Komga connection - Komga authentication is via Wizarr."""
     komga_url = await get_setting(db, "komga_url", "")
-    username = await get_setting(db, "komga_username", "")
-    password = await get_setting(db, "komga_password", "")
-    return await check_connection_inline(komga_url, username, password)
+    return await check_connection_inline(komga_url)
 
 
-async def check_connection_inline(url: str, username: str, password: str) -> dict[str, Any]:
+async def check_connection_inline(url: str) -> dict[str, Any]:
+    """Check Komga connection - Komga authentication is via Wizarr, not separate credentials."""
     if not url:
         return {"connected": False, "error": "Komga URL not configured"}
     base_url = f"{url.rstrip('/')}/api/v1"
-    auth: tuple[str, str] | None = (username, password) if username and password else None
+    
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(f"{base_url}/users/me", auth=auth)
+            # Try to reach a public endpoint that doesn't require auth
+            resp = await client.get(f"{base_url}/libraries")
             if resp.status_code == 200:
-                data = resp.json()
-                return {"connected": True, "user": data.get("email", ""), "roles": data.get("roles", [])}
+                return {"connected": True}
+            elif resp.status_code in (401, 403):
+                # Auth required but reachable
+                return {"connected": True, "note": "Auth required (check Wizarr setup)"}
             return {"connected": False, "error": f"HTTP {resp.status_code}"}
     except Exception as exc:
         return {"connected": False, "error": str(exc)}
@@ -55,9 +55,8 @@ async def get_libraries(db: AsyncSession) -> list[dict]:
         return []
 
     base_url = await _base_url(db)
-    auth = await _auth(db)
     async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(f"{base_url}/libraries", auth=auth)
+        resp = await client.get(f"{base_url}/libraries")
         resp.raise_for_status()
     return resp.json()
 
@@ -68,9 +67,8 @@ async def scan_library(db: AsyncSession, library_id: str) -> dict[str, Any]:
         return {"success": False, "error": "Komga URL not configured"}
 
     base_url = await _base_url(db)
-    auth = await _auth(db)
     async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.post(f"{base_url}/libraries/{library_id}/scan", auth=auth)
+        resp = await client.post(f"{base_url}/libraries/{library_id}/scan")
         return {"success": resp.status_code in (200, 202, 204)}
 
 
@@ -89,8 +87,7 @@ async def get_series(
         params["library_id"] = library_id
 
     base_url = await _base_url(db)
-    auth = await _auth(db)
     async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(f"{base_url}/series", params=params, auth=auth)
+        resp = await client.get(f"{base_url}/series", params=params)
         resp.raise_for_status()
     return resp.json()

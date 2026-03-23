@@ -19,8 +19,6 @@ ALLOWED_KEYS = {
     "comic_ingest_folder",
     "manga_ingest_folder",
     "komga_url",
-    "komga_username",
-    "komga_password",
     "google_books_api_key",
     "comicvine_api_key",
     "prowlarr_url",

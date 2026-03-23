@@ -1,4 +1,10 @@
+x-common_env: &common_env
+  PUID: ${PUID:-1000}
+  PGID: ${PGID:-1000}
+  TZ: ${TZ:-UTC}
+
 services:
+  # GhostShelf Backend
   backend:
     build: ./backend
     container_name: ghostshelf-backend
@@ -6,25 +12,163 @@ services:
     environment:
       - DEBUG=${DEBUG:-false}
       - DATABASE_URL=sqlite+aiosqlite:////data/ghostshelf.db
-      - CORS_ORIGINS=http://localhost:4141,http://frontend
+      - WIZARR_DB_PATH=${INSTALL_DIRECTORY:-/opt/ghostshelf}/config/wizarr/app.db
+      - CORS_ORIGINS=http://localhost:4141,http://frontend,http://localhost:5690
     volumes:
       - ghostshelf-data:/data
+      # Read-only mount to Wizarr database for auth
+      - ${INSTALL_DIRECTORY:-/opt/ghostshelf}/config/wizarr:/wizarr-config:ro
+      # Media directories from GhostWorld stack
+      - ${MEDIA_DIRECTORY:-/media}/comics:/media/comics:ro
+      - ${MEDIA_DIRECTORY:-/media}/manga:/media/manga:ro
+      - ${MEDIA_DIRECTORY:-/media}/books:/media/books:ro
+      - ${MEDIA_DIRECTORY:-/media}/book-ingest:/media/book-ingest
+      # Service configs for integration
+      - ${INSTALL_DIRECTORY:-/opt/ghostshelf}/config/komga:/config/komga:ro
+      - ${INSTALL_DIRECTORY:-/opt/ghostshelf}/config/cwa:/config/cwa:ro
+      - ${INSTALL_DIRECTORY:-/opt/ghostshelf}/config/prowlarr:/config/prowlarr:ro
+      - ${INSTALL_DIRECTORY:-/opt/ghostshelf}/config/qbittorrent:/config/qbittorrent:ro
     ports:
       - "8001:8000"
+    networks:
+      - ghost_network
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
 
+  # GhostShelf Frontend
   frontend:
     build: ./frontend
     container_name: ghostshelf-frontend
     restart: unless-stopped
     ports:
       - "4141:80"
+    networks:
+      - ghost_network
     depends_on:
       - backend
 
+  # Wizarr - unified web UI & auth provider
+  wizarr:
+    container_name: wizarr
+    image: ghcr.io/wizarrrr/wizarr:latest
+    ports:
+      - 5690:5690
+    volumes:
+      - ${INSTALL_DIRECTORY:-/opt/ghostshelf}/config/wizarr:/data
+    environment:
+      <<: *common_env
+      DISABLE_BUILTIN_AUTH: "false"
+    restart: unless-stopped
+    networks:
+      - ghost_network
+
+  # Komga (Comic/Manga server)
+  komga:
+    image: gotson/komga:latest
+    container_name: komga
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ${INSTALL_DIRECTORY:-/opt/ghostshelf}/config/komga
+        target: /config
+      - type: bind
+        source: ${MEDIA_DIRECTORY:-/media}/comics
+        target: /comics
+      - type: bind
+        source: ${MEDIA_DIRECTORY:-/media}/manga
+        target: /manga
+    ports:
+      - 25600:25600
+    user: "1000:1000"
+    environment:
+      - TZ=${TZ:-America/New_York}
+    networks:
+      - ghost_network
+
+  # Calibre-Web-Automated (CWA - Books server)
+  cwa:
+    image: crocodilestick/calibre-web-automated:latest
+    container_name: calibre-web-automated
+    restart: unless-stopped
+    environment:
+      <<: *common_env
+    volumes:
+      - ${INSTALL_DIRECTORY:-/opt/ghostshelf}/config/cwa:/config
+      - ${MEDIA_DIRECTORY:-/media}/book-ingest:/cwa-book-ingest
+      - ${MEDIA_DIRECTORY:-/media}/books:/calibre-library
+      - ${INSTALL_DIRECTORY:-/opt/ghostshelf}/config/cwa/.config/calibre/plugins:/config/.config/calibre/plugins
+    ports:
+      - 8083:8083
+    networks:
+      - ghost_network
+
+  # Prowlarr (Indexer Manager)
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    restart: unless-stopped
+    environment:
+      <<: *common_env
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${INSTALL_DIRECTORY:-/opt/ghostshelf}/config/prowlarr:/config
+    ports:
+      - 9696:9696
+    networks:
+      - ghost_network
+
+  # qBittorrent (Torrent Client via Gluetun VPN)
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:4.6.3
+    container_name: qbittorrent
+    restart: unless-stopped
+    environment:
+      <<: *common_env
+      WEBUI_PORT: 8081
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${MEDIA_DIRECTORY:-/media}:/data
+      - ${INSTALL_DIRECTORY:-/opt/ghostshelf}/config/qbittorrent:/config
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+
+  # Gluetun VPN Gateway (for secure torrent downloads)
+  gluetun:
+    image: qmcgaw/gluetun:v3
+    container_name: gluetun
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - 8888:8888/tcp
+      - 8388:8388/tcp
+      - 8388:8388/udp
+      - 8003:8000/tcp
+      - 8080:8080/tcp
+      - 8081:8081/tcp
+    environment:
+      VPN_SERVICE_PROVIDER: ${VPN_SERVICE_PROVIDER:-protonvpn}
+      VPN_TYPE: ${VPN_TYPE:-wireguard}
+      WIREGUARD_PRIVATE_KEY: ${WIREGUARD_PRIVATE_KEY}
+      VPN_PORT_FORWARDING: "on"
+      VPN_PORT_FORWARDING_PROVIDER: ${VPN_PORT_FORWARDING_PROVIDER:-protonvpn}
+      PORT_FORWARD_ONLY: "on"
+    networks:
+      - ghost_network
+
 volumes:
   ghostshelf-data:
+
+networks:
+  ghost_network:
+    name: ghost_network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.60.0.0/24
