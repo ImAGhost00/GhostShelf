@@ -241,9 +241,6 @@ async def search_comics(
     target_content_type = ContentType.comic if content_type == "comic" else ContentType.manga
 
     releases = await search_releases(db=db, query=query, content_type=target_content_type, limit=max(limit * 2, 25))
-    if not releases:
-        return []
-
     metadata_candidates: list[dict[str, Any]] = []
     if target_content_type == ContentType.comic:
         try:
@@ -262,6 +259,23 @@ async def search_comics(
 
     def normalize(value: str) -> str:
         return " ".join(value.casefold().split())
+
+    def strong_key(value: str) -> str:
+        return "".join(ch for ch in normalize(value) if ch.isalnum())
+
+    def title_score(left: str, right: str) -> int:
+        left_norm = normalize(left)
+        right_norm = normalize(right)
+        if not left_norm or not right_norm:
+            return 0
+        if left_norm == right_norm:
+            return 8
+        if left_norm in right_norm or right_norm in left_norm:
+            return 5
+        left_words = set(left_norm.split())
+        right_words = set(right_norm.split())
+        overlap = left_words & right_words
+        return min(len(overlap), 4)
 
     def find_meta(title: str) -> dict[str, Any] | None:
         target = normalize(title)
@@ -282,6 +296,54 @@ async def search_comics(
                 best_score = score
                 best = meta
         return best if best_score >= 3 else None
+
+    if target_content_type == ContentType.manga:
+        merged_manga: dict[str, dict[str, Any]] = {}
+
+        for meta in metadata_candidates:
+            title = str(meta.get("title", "") or "").strip()
+            if not title:
+                continue
+            key = strong_key(title)
+            if not key:
+                continue
+
+            related_releases = [release for release in releases if title_score(title, str(release.get("title", ""))) >= 4]
+            available_sources = list(dict.fromkeys([meta.get("source", "manga"), *("prowlarr",) if related_releases else tuple()]))
+            meta_result = dict(meta)
+            meta_result["available_sources"] = [source for source in available_sources if source]
+            merged_manga[key] = meta_result
+
+        for release in releases:
+            release_title = str(release.get("title", "") or "").strip()
+            if not release_title:
+                continue
+            meta = find_meta(release_title)
+            title = str(meta.get("title") if meta else release_title)
+            key = strong_key(title)
+            if not key:
+                continue
+            if key in merged_manga:
+                sources = merged_manga[key].setdefault("available_sources", [])
+                if "prowlarr" not in sources:
+                    sources.append("prowlarr")
+                continue
+            merged_manga[key] = _comic_obj(
+                source="prowlarr",
+                source_id=str(release.get("guid", release_title)),
+                content_type=target_content_type.value,
+                title=title,
+                authors=[str(meta.get("author", ""))] if meta and meta.get("author") else [],
+                description=str(meta.get("description", "")) if meta else "",
+                cover_url=str(meta.get("cover_url", "")) if meta else "",
+                year=str(meta.get("year", "")) if meta else "",
+                genres=list(meta.get("genres", [])) if meta else [],
+            )
+
+        return list(merged_manga.values())[:limit]
+
+    if not releases:
+        return metadata_candidates[:limit]
 
     merged: dict[str, dict[str, Any]] = {}
     for release in releases:

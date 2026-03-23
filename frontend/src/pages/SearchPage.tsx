@@ -114,7 +114,7 @@ const SearchPage: React.FC = () => {
       if (mode === 'books') {
         resp = await searchBooks(query, source);
       } else {
-        resp = await searchComics(query, 'prowlarr', mode === 'comics' ? 'comic' : 'manga');
+        resp = await searchComics(query, 'prowlarr', mode === 'comics' ? 'comic' : 'manga', mode === 'manga' ? 40 : 20);
       }
       setResults(resp.results);
       if (resp.results.length === 0) setError('No results found. Try a different query or source.');

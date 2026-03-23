@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.models import ContentType
 from app.services.settings_store import get_setting
 
+ENGLISH_LANGUAGE_CODES = {"en", "eng", "en-us", "en-gb", "english"}
+
 
 def _prowlarr_category(content_type: ContentType) -> str:
     # Newznab categories: Books=7000, Comics=7030
@@ -51,6 +53,41 @@ async def check_connection_inline(url: str, api_key: str) -> dict[str, Any]:
         return {"connected": False, "error": str(exc)}
 
 
+def _language_tokens(value: Any) -> set[str]:
+    tokens: set[str] = set()
+    if value is None:
+        return tokens
+    if isinstance(value, str):
+        cleaned = value.strip().casefold()
+        if cleaned:
+            tokens.add(cleaned)
+        return tokens
+    if isinstance(value, dict):
+        for key in ("name", "value", "code", "label", "displayName"):
+            tokens.update(_language_tokens(value.get(key)))
+        return tokens
+    if isinstance(value, list):
+        for item in value:
+            tokens.update(_language_tokens(item))
+    return tokens
+
+
+def _is_english_release(item: dict[str, Any]) -> bool:
+    language_tokens: set[str] = set()
+    for key in ("languages", "language", "lang"):
+        language_tokens.update(_language_tokens(item.get(key)))
+
+    if not language_tokens:
+        return True
+
+    for token in language_tokens:
+        if token in ENGLISH_LANGUAGE_CODES:
+            return True
+        if token.startswith("en-"):
+            return True
+    return False
+
+
 async def search_releases(
     db: AsyncSession,
     query: str,
@@ -74,7 +111,9 @@ async def search_releases(
 
     data = resp.json()
     out: list[dict[str, Any]] = []
-    for item in data[:limit]:
+    for item in data:
+        if not _is_english_release(item):
+            continue
         out.append(
             {
                 "title": item.get("title", ""),
@@ -87,4 +126,6 @@ async def search_releases(
                 "seeders": item.get("seeders", 0),
             }
         )
+        if len(out) >= limit:
+            break
     return out
