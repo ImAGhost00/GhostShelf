@@ -51,6 +51,8 @@ def _validate_destination_path(destination: str) -> bool:
         "/media/MediaPool/book-ingest",
         "/media/MediaPool/comics",
         "/media/MediaPool/manga",
+        "/media/MediaPool/downloads",
+        "/media/downloads",
     ]
     
     # Allow any path that starts with an allowed root (with proper separator)

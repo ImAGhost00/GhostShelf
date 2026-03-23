@@ -40,6 +40,11 @@ export interface DownloadItem {
   status: string;
   destination: string | null;
   error_message: string | null;
+  progress?: number;
+  eta?: number;
+  speed?: number;
+  state?: string;
+  save_path?: string;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -65,4 +70,6 @@ export interface AppSettings {
   qbittorrent_url?: string;
   qbittorrent_username?: string;
   qbittorrent_password?: string;
+  qbittorrent_download_folder?: string;
+  local_downloads_folder?: string;
 }

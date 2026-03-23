@@ -268,6 +268,26 @@ const SettingsPage: React.FC = () => {
                 onChange={set('qbittorrent_password')}
               />
             </div>
+            <div className="form-field">
+              <label>qBittorrent Download Folder</label>
+              <input
+                type="text"
+                placeholder="/data/downloads"
+                value={form.qbittorrent_download_folder ?? ''}
+                onChange={set('qbittorrent_download_folder')}
+              />
+              <span className="hint">Path as qBittorrent sees the staging downloads folder.</span>
+            </div>
+            <div className="form-field">
+              <label>GhostShelf Local Downloads Folder</label>
+              <input
+                type="text"
+                placeholder="/media/downloads"
+                value={form.local_downloads_folder ?? ''}
+                onChange={set('local_downloads_folder')}
+              />
+              <span className="hint">Matching folder path as the GhostShelf backend sees the same completed files.</span>
+            </div>
           </div>
           <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <button className="btn btn-ghost btn-sm" onClick={testQbittorrent}>Test Connection</button>

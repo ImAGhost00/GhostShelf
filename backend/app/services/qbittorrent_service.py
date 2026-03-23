@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import re
+import shutil
 from typing import Any
 
 import httpx
@@ -9,6 +12,138 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.models import ContentType, DownloadItem, ItemStatus, WatchlistItem
 from app.services.download_service import get_download_target_folder
 from app.services.settings_store import get_setting
+
+TAG_PREFIX = "ghostshelf-"
+
+
+def _download_tag(download_id: int) -> str:
+    return f"{TAG_PREFIX}{download_id}"
+
+
+def _parse_download_id_from_tags(tags: str | None) -> int | None:
+    for tag in (tags or "").split(","):
+        clean = tag.strip()
+        if clean.startswith(TAG_PREFIX):
+            suffix = clean[len(TAG_PREFIX):]
+            if suffix.isdigit():
+                return int(suffix)
+    return None
+
+
+async def _login_client(client: httpx.AsyncClient, base_url: str, username: str, password: str) -> None:
+    if username and password:
+        login = await client.post(
+            f"{base_url}/api/v2/auth/login",
+            data={"username": username, "password": password},
+        )
+        if login.status_code >= 400 or "ok" not in login.text.lower():
+            raise RuntimeError("qBittorrent login failed")
+
+
+def _normalize_path(path: str) -> str:
+    return path.replace("\\", "/").rstrip("/")
+
+
+def _map_remote_path_to_local(remote_path: str, remote_root: str, local_root: str) -> str:
+    remote_path_norm = _normalize_path(remote_path)
+    remote_root_norm = _normalize_path(remote_root)
+    local_root_norm = _normalize_path(local_root)
+
+    if remote_path_norm.startswith(remote_root_norm + "/"):
+        rel_path = remote_path_norm[len(remote_root_norm) + 1:]
+        return os.path.join(local_root_norm, *rel_path.split("/"))
+    return os.path.join(local_root_norm, os.path.basename(remote_path_norm))
+
+
+def _torrent_is_complete(torrent: dict[str, Any]) -> bool:
+    progress = float(torrent.get("progress") or 0.0)
+    amount_left = int(torrent.get("amount_left") or 0)
+    state = str(torrent.get("state") or "")
+    return progress >= 1.0 or amount_left == 0 or state in {"uploading", "stalledUP", "pausedUP", "queuedUP", "forcedUP", "checkingUP"}
+
+
+def _torrent_is_failed(torrent: dict[str, Any]) -> bool:
+    state = str(torrent.get("state") or "").lower()
+    return "error" in state or "missingfiles" in state
+
+
+def _unique_target_path(base_dir: str, name: str) -> str:
+    candidate = os.path.join(base_dir, name)
+    if not os.path.exists(candidate):
+        return candidate
+    stem, ext = os.path.splitext(name)
+    index = 1
+    while True:
+        alt_name = f"{stem} ({index}){ext}"
+        alt_path = os.path.join(base_dir, alt_name)
+        if not os.path.exists(alt_path):
+            return alt_path
+        index += 1
+
+
+async def _update_watchlist_status(db: AsyncSession, watchlist_id: int | None, status: ItemStatus) -> None:
+    if not watchlist_id:
+        return
+    result = await db.execute(select(WatchlistItem).where(WatchlistItem.id == watchlist_id))
+    item = result.scalar_one_or_none()
+    if item:
+        item.status = status
+
+
+async def _fetch_torrents(client: httpx.AsyncClient, base_url: str) -> list[dict[str, Any]]:
+    response = await client.get(f"{base_url}/api/v2/torrents/info")
+    response.raise_for_status()
+    data = response.json()
+    return data if isinstance(data, list) else []
+
+
+async def _finalize_completed_torrent(
+    client: httpx.AsyncClient,
+    base_url: str,
+    db: AsyncSession,
+    download: DownloadItem,
+    torrent: dict[str, Any],
+    remote_root: str,
+    local_root: str,
+) -> dict[str, Any]:
+    target_dir = download.destination or await get_download_target_folder(db, download.content_type, None)
+    if not target_dir:
+        raise RuntimeError("Final destination folder not configured")
+
+    remote_content_path = str(torrent.get("content_path") or "")
+    if not remote_content_path:
+        remote_save_path = str(torrent.get("save_path") or remote_root)
+        remote_name = str(torrent.get("name") or download.title)
+        remote_content_path = f"{_normalize_path(remote_save_path)}/{remote_name}"
+
+    local_content_path = _map_remote_path_to_local(remote_content_path, remote_root, local_root)
+    if not os.path.exists(local_content_path):
+        raise RuntimeError(f"Completed download not found locally: {local_content_path}")
+
+    torrent_hash = str(torrent.get("hash") or "")
+    if torrent_hash:
+        await client.post(
+            f"{base_url}/api/v2/torrents/delete",
+            data={"hashes": torrent_hash, "deleteFiles": "false"},
+        )
+
+    os.makedirs(target_dir, exist_ok=True)
+    base_name = os.path.basename(local_content_path.rstrip(os.sep))
+    final_path = _unique_target_path(target_dir, base_name)
+    moved_path = shutil.move(local_content_path, final_path)
+
+    download.status = "done"
+    download.destination = moved_path
+    download.error_message = None
+    await _update_watchlist_status(db, download.watchlist_id, ItemStatus.downloaded)
+
+    return {
+        "progress": 1,
+        "eta": 0,
+        "speed": 0,
+        "state": "completed",
+        "save_path": moved_path,
+    }
 
 
 async def check_connection(db: AsyncSession) -> dict[str, Any]:
@@ -54,13 +189,14 @@ async def enqueue_download(
     destination: str | None = None,
 ) -> dict[str, Any]:
     """Queue a magnet or torrent URL in qBittorrent."""
-    folder = await get_download_target_folder(db, content_type, destination)
-    if not folder:
+    final_folder = await get_download_target_folder(db, content_type, destination)
+    if not final_folder:
         return {"ok": False, "error": "Destination folder not configured"}
 
     base_url = (await get_setting(db, "qbittorrent_url", "")).rstrip("/")
     username = await get_setting(db, "qbittorrent_username", "")
     password = await get_setting(db, "qbittorrent_password", "")
+    qb_download_folder = await get_setting(db, "qbittorrent_download_folder", "/data/downloads")
     if not base_url:
         return {"ok": False, "error": "qBittorrent URL not configured"}
 
@@ -70,7 +206,7 @@ async def enqueue_download(
         content_type=content_type,
         download_url=source_url,
         status="queued",
-        destination=folder,
+        destination=final_folder,
     )
     db.add(download)
     await db.commit()
@@ -86,17 +222,15 @@ async def enqueue_download(
 
     try:
         async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
-            if username and password:
-                login = await client.post(
-                    f"{base_url}/api/v2/auth/login",
-                    data={"username": username, "password": password},
-                )
-                if login.status_code >= 400 or "ok" not in login.text.lower():
-                    raise RuntimeError("qBittorrent login failed")
+            await _login_client(client, base_url, username, password)
 
             add_resp = await client.post(
                 f"{base_url}/api/v2/torrents/add",
-                data={"urls": source_url, "savepath": folder},
+                data={
+                    "urls": source_url,
+                    "savepath": qb_download_folder,
+                    "tags": _download_tag(download.id),
+                },
             )
             if add_resp.status_code >= 400:
                 raise RuntimeError(f"qBittorrent add failed with HTTP {add_resp.status_code}")
@@ -104,7 +238,7 @@ async def enqueue_download(
         return {
             "ok": True,
             "download_id": download.id,
-            "destination": folder,
+            "destination": final_folder,
             "status": download.status,
             "queued_in": "qbittorrent",
         }
@@ -115,3 +249,106 @@ async def enqueue_download(
             watchlist_item.status = ItemStatus.failed
         await db.commit()
         return {"ok": False, "download_id": download.id, "error": str(exc), "status": download.status}
+
+
+async def refresh_downloads(db: AsyncSession) -> dict[int, dict[str, Any]]:
+    """Sync active download records with qBittorrent and finalize completed jobs."""
+    result = await db.execute(select(DownloadItem).where(DownloadItem.status.in_(["queued", "downloading"])))
+    downloads = result.scalars().all()
+    if not downloads:
+        return {}
+
+    base_url = (await get_setting(db, "qbittorrent_url", "")).rstrip("/")
+    username = await get_setting(db, "qbittorrent_username", "")
+    password = await get_setting(db, "qbittorrent_password", "")
+    qb_download_folder = await get_setting(db, "qbittorrent_download_folder", "/data/downloads")
+    local_downloads_folder = await get_setting(db, "local_downloads_folder", "/media/downloads")
+    if not base_url:
+        return {}
+
+    metadata: dict[int, dict[str, Any]] = {}
+    changed = False
+
+    try:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+            await _login_client(client, base_url, username, password)
+            torrents = await _fetch_torrents(client, base_url)
+            torrents_by_download_id = {
+                download_id: torrent
+                for torrent in torrents
+                if (download_id := _parse_download_id_from_tags(torrent.get("tags"))) is not None
+            }
+
+            for download in downloads:
+                torrent = torrents_by_download_id.get(download.id)
+                if not torrent:
+                    continue
+
+                if _torrent_is_failed(torrent):
+                    download.status = "failed"
+                    download.error_message = str(torrent.get("state") or "Torrent failed")
+                    await _update_watchlist_status(db, download.watchlist_id, ItemStatus.failed)
+                    metadata[download.id] = {
+                        "progress": float(torrent.get("progress") or 0.0),
+                        "eta": int(torrent.get("eta") or 0),
+                        "speed": int(torrent.get("dlspeed") or 0),
+                        "state": str(torrent.get("state") or "failed"),
+                        "save_path": str(torrent.get("save_path") or ""),
+                    }
+                    changed = True
+                    continue
+
+                if _torrent_is_complete(torrent):
+                    metadata[download.id] = await _finalize_completed_torrent(
+                        client,
+                        base_url,
+                        db,
+                        download,
+                        torrent,
+                        qb_download_folder,
+                        local_downloads_folder,
+                    )
+                    changed = True
+                    continue
+
+                progress = float(torrent.get("progress") or 0.0)
+                download.status = "downloading" if progress > 0 else "queued"
+                download.error_message = None
+                metadata[download.id] = {
+                    "progress": progress,
+                    "eta": int(torrent.get("eta") or 0),
+                    "speed": int(torrent.get("dlspeed") or 0),
+                    "state": str(torrent.get("state") or download.status),
+                    "save_path": str(torrent.get("save_path") or ""),
+                }
+                changed = True
+    except Exception:
+        return metadata
+
+    if changed:
+        await db.commit()
+    return metadata
+
+
+async def cancel_download(db: AsyncSession, download: DownloadItem) -> None:
+    """Cancel an active qBittorrent-backed download using the download tag."""
+    base_url = (await get_setting(db, "qbittorrent_url", "")).rstrip("/")
+    username = await get_setting(db, "qbittorrent_username", "")
+    password = await get_setting(db, "qbittorrent_password", "")
+    if not base_url:
+        return
+
+    try:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+            await _login_client(client, base_url, username, password)
+            torrents = await _fetch_torrents(client, base_url)
+            tag = _download_tag(download.id)
+            hashes = [str(t.get("hash") or "") for t in torrents if tag in str(t.get("tags") or "")]
+            hashes = [h for h in hashes if h]
+            if hashes:
+                await client.post(
+                    f"{base_url}/api/v2/torrents/delete",
+                    data={"hashes": "|".join(hashes), "deleteFiles": "false"},
+                )
+    except Exception:
+        return

@@ -21,6 +21,8 @@ services:
       - QBITTORRENT_URL=
       - QBITTORRENT_USERNAME=
       - QBITTORRENT_PASSWORD=
+      - QBITTORRENT_DOWNLOAD_FOLDER=/data/downloads
+      - LOCAL_DOWNLOADS_FOLDER=/media/downloads
       - GOOGLE_BOOKS_API_KEY=
       - COMICVINE_API_KEY=
     volumes:
@@ -31,6 +33,7 @@ services:
       - /media/MediaPool/comics:/media/comics
       - /media/MediaPool/manga:/media/manga
       - /media/MediaPool/book-ingest:/media/book-ingest
+      - /media/MediaPool/downloads:/media/downloads
     ports:
       - "8001:8000"
     healthcheck:

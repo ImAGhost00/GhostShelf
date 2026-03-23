@@ -16,15 +16,35 @@ const DownloadsPage: React.FC = () => {
   const [items, setItems] = useState<DownloadItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = () => {
-    setLoading(true);
+  const load = (silent = false) => {
+    if (!silent) setLoading(true);
     getDownloads()
       .then(setItems)
       .catch(() => toast('Failed to load downloads', 'error'))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
   };
 
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+    const interval = window.setInterval(() => load(true), 5000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const formatEta = (eta?: number) => {
+    if (!eta || eta < 0) return null;
+    const minutes = Math.floor(eta / 60);
+    const seconds = eta % 60;
+    if (minutes <= 0) return `${seconds}s left`;
+    return `${minutes}m ${seconds}s left`;
+  };
+
+  const formatSpeed = (speed?: number) => {
+    if (!speed || speed <= 0) return null;
+    const mib = speed / (1024 * 1024);
+    return `${mib.toFixed(1)} MiB/s`;
+  };
 
   const handleCancel = async (id: number) => {
     try {
@@ -71,6 +91,25 @@ const DownloadsPage: React.FC = () => {
             </span>
           )}
         </div>
+        {typeof item.progress === 'number' && item.status !== 'done' && item.status !== 'failed' && item.status !== 'cancelled' && (
+          <div style={{ marginTop: '0.45rem' }}>
+            <div style={{ height: '8px', background: 'var(--surface-3)', borderRadius: '999px', overflow: 'hidden' }}>
+              <div
+                style={{
+                  width: `${Math.max(0, Math.min(100, item.progress * 100))}%`,
+                  height: '100%',
+                  background: 'linear-gradient(90deg, #1f7a8c 0%, #7bd389 100%)',
+                }}
+              />
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <span>{Math.round(item.progress * 100)}%</span>
+              {item.state && <span>{item.state}</span>}
+              {formatSpeed(item.speed) && <span>{formatSpeed(item.speed)}</span>}
+              {formatEta(item.eta) && <span>{formatEta(item.eta)}</span>}
+            </div>
+          </div>
+        )}
       </div>
       <div style={{ display: 'flex', gap: '0.35rem' }}>
         {(item.status === 'queued' || item.status === 'downloading') && (

@@ -26,6 +26,8 @@ ALLOWED_KEYS = {
     "qbittorrent_url",
     "qbittorrent_username",
     "qbittorrent_password",
+    "qbittorrent_download_folder",
+    "local_downloads_folder",
 }
 
 

@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     qbittorrent_url: str = ""
     qbittorrent_username: str = ""
     qbittorrent_password: str = ""
+    qbittorrent_download_folder: str = "/data/downloads"
+    local_downloads_folder: str = "/media/downloads"
 
     @property
     def cors_origins_list(self) -> list[str]:

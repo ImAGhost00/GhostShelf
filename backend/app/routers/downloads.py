@@ -10,7 +10,11 @@ from app.database import get_db
 from app.models.models import DownloadItem, ContentType
 from app.services.download_service import start_direct_download
 from app.services.prowlarr_service import search_releases
-from app.services.qbittorrent_service import enqueue_download as enqueue_qbittorrent_download
+from app.services.qbittorrent_service import (
+    cancel_download as cancel_qbittorrent_download,
+    enqueue_download as enqueue_qbittorrent_download,
+    refresh_downloads as refresh_qbittorrent_downloads,
+)
 from app.services.smart_download_service import find_direct_urls
 
 router = APIRouter(prefix="/downloads", tags=["downloads"])
@@ -47,8 +51,8 @@ class SmartAutoRequest(BaseModel):
     destination: Optional[str] = None
 
 
-def _item_to_dict(item: DownloadItem) -> dict:
-    return {
+def _item_to_dict(item: DownloadItem, extra: dict | None = None) -> dict:
+    data = {
         "id": item.id,
         "watchlist_id": item.watchlist_id,
         "title": item.title,
@@ -60,12 +64,16 @@ def _item_to_dict(item: DownloadItem) -> dict:
         "created_at": item.created_at.isoformat() if item.created_at else None,
         "updated_at": item.updated_at.isoformat() if item.updated_at else None,
     }
+    if extra:
+        data.update(extra)
+    return data
 
 
 @router.get("")
 async def list_downloads(db: AsyncSession = Depends(get_db)):
+    progress_by_id = await refresh_qbittorrent_downloads(db)
     result = await db.execute(select(DownloadItem).order_by(DownloadItem.created_at.desc()))
-    return [_item_to_dict(i) for i in result.scalars().all()]
+    return [_item_to_dict(i, progress_by_id.get(i.id)) for i in result.scalars().all()]
 
 
 @router.post("", status_code=201)
@@ -253,6 +261,8 @@ async def update_download_status(
     allowed = {"queued", "downloading", "done", "failed", "cancelled"}
     if status not in allowed:
         raise HTTPException(status_code=400, detail=f"Status must be one of: {', '.join(allowed)}")
+    if status == "cancelled":
+        await cancel_qbittorrent_download(db, item)
     item.status = status
     await db.commit()
     await db.refresh(item)
