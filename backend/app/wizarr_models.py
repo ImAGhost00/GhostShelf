@@ -92,6 +92,17 @@ def get_wizarr_users_by_username(username: str) -> list[WizarrUser]:
         raise RuntimeError("Failed to authenticate user: database error") from e
 
 
+def get_unique_wizarr_user_by_username(username: str) -> WizarrUser | None:
+    """Fetch a single active Wizarr user by username.
+
+    Returns None if the username does not exist or maps to multiple active users.
+    """
+    rows = get_wizarr_users_by_username(username.strip())
+    if len(rows) != 1:
+        return None
+    return rows[0]
+
+
 def get_media_server_by_id(server_id: int | None) -> WizarrMediaServer | None:
     if server_id is None:
         return None

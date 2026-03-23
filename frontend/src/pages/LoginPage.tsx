@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -12,8 +11,8 @@ const LoginPage: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!username.trim() || !password) {
-      toast('Please enter your username and password', 'error');
+    if (!username.trim()) {
+      toast('Please enter your username', 'error');
       return;
     }
 
@@ -22,7 +21,7 @@ const LoginPage: React.FC = () => {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.trim(), password }),
+        body: JSON.stringify({ username: username.trim() }),
       });
       
       if (!res.ok) {
@@ -86,29 +85,8 @@ const LoginPage: React.FC = () => {
               }}
             />
             <small style={{ color: '#999', marginTop: '0.5rem', display: 'block' }}>
-              Use the same credentials you created through Wizarr.
+              Sign in with your Wizarr username.
             </small>
-          </div>
-
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: '#555' }}>
-              Password
-            </label>
-            <input
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '2px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '1rem',
-                boxSizing: 'border-box',
-              }}
-            />
           </div>
 
           <button

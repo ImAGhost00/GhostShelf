@@ -6,7 +6,8 @@ services:
     restart: unless-stopped
     environment:
       - DEBUG=false
-      - SECRET_KEY=${SECRET_KEY}
+      - SECRET_KEY=${SECRET_KEY:-}
+      - JWT_SECRET_FILE=/data/ghostshelf.secret
       - DATABASE_URL=sqlite+aiosqlite:////data/ghostshelf.db
       - WIZARR_DB_PATH=/wizarr-db/database.db
       - CORS_ORIGINS=http://localhost:4141,http://frontend,http://localhost:5690

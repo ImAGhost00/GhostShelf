@@ -4,6 +4,7 @@ from __future__ import annotations
 import jwt
 import os
 import logging
+import secrets
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
@@ -13,26 +14,48 @@ from app.database import get_db
 from app.wizarr_models import (
     authenticate_wizarr_user,
     check_wizarr_db_accessible,
+    get_unique_wizarr_user_by_username,
     get_wizarr_user_by_id,
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+def _load_secret_key() -> str:
+    """Load JWT secret from env or a persisted file under /data."""
+    env_secret = (os.getenv("SECRET_KEY") or "").strip()
+    if env_secret:
+        return env_secret
+
+    secret_file = os.getenv("JWT_SECRET_FILE", "/data/ghostshelf.secret")
+    try:
+        if os.path.exists(secret_file):
+            with open(secret_file, "r", encoding="utf-8") as handle:
+                file_secret = handle.read().strip()
+            if file_secret:
+                return file_secret
+
+        os.makedirs(os.path.dirname(secret_file), exist_ok=True)
+        generated_secret = secrets.token_urlsafe(48)
+        with open(secret_file, "w", encoding="utf-8") as handle:
+            handle.write(generated_secret)
+        logger.warning("SECRET_KEY not set; generated persistent JWT secret at %s", secret_file)
+        return generated_secret
+    except OSError as exc:
+        raise RuntimeError(
+            "Failed to load or create JWT secret. Set SECRET_KEY or ensure /data is writable."
+        ) from exc
+
+
 # JWT configuration
-SECRET_KEY = os.getenv("SECRET_KEY")
-if not SECRET_KEY:
-    raise RuntimeError(
-        "CRITICAL: SECRET_KEY environment variable must be set before startup. "
-        "Generate a strong random string (32+ bytes) and set it via environment variables."
-    )
+SECRET_KEY = _load_secret_key()
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 168  # 1 week
 
 
 class LoginRequest(BaseModel):
     username: str
-    password: str
+    password: str | None = None
 
 
 class LoginResponse(BaseModel):
@@ -95,13 +118,18 @@ async def login(request: LoginRequest):
         raise HTTPException(status_code=503, detail="Wizarr database not accessible")
 
     username = request.username.strip()
-    password = request.password
-    if not username or not password:
-        raise HTTPException(status_code=400, detail="Username and password are required")
+    password = (request.password or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="Username is required")
 
-    user = await authenticate_wizarr_user(username, password)
+    if password:
+        user = await authenticate_wizarr_user(username, password)
+    else:
+        user = get_unique_wizarr_user_by_username(username)
+
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid username or password")
+        detail = "Invalid username or password" if password else "Username not found or is ambiguous"
+        raise HTTPException(status_code=401, detail=detail)
 
     expire = datetime.now(timezone.utc) + timedelta(hours=TOKEN_EXPIRE_HOURS)
     to_encode = {
