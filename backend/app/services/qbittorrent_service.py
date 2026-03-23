@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 from sqlalchemy import select
@@ -14,6 +15,15 @@ from app.services.download_service import get_download_target_folder
 from app.services.settings_store import get_setting
 
 TAG_PREFIX = "ghostshelf-"
+
+
+def _webui_headers(base_url: str) -> dict[str, str]:
+    parsed = urlsplit(base_url)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    return {
+        "Origin": origin,
+        "Referer": f"{origin}/",
+    }
 
 
 def _download_tag(download_id: int) -> str:
@@ -38,6 +48,40 @@ async def _login_client(client: httpx.AsyncClient, base_url: str, username: str,
         )
         if login.status_code >= 400 or "ok" not in login.text.lower():
             raise RuntimeError("qBittorrent login failed")
+
+
+async def _get_categories(client: httpx.AsyncClient, base_url: str) -> dict[str, Any]:
+    response = await client.get(f"{base_url}/api/v2/torrents/categories")
+    response.raise_for_status()
+    data = response.json()
+    return data if isinstance(data, dict) else {}
+
+
+async def _ensure_category_exists(client: httpx.AsyncClient, base_url: str, category: str) -> None:
+    clean = (category or "").strip()
+    if not clean:
+        return
+    categories = await _get_categories(client, base_url)
+    if clean in categories:
+        return
+    response = await client.post(
+        f"{base_url}/api/v2/torrents/createCategory",
+        data={"category": clean},
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(f'Unable to create qBittorrent category "{clean}"')
+
+
+async def _category_for_content_type(db: AsyncSession, content_type: ContentType) -> str:
+    key_map = {
+        ContentType.book: "qbittorrent_book_category",
+        ContentType.comic: "qbittorrent_comic_category",
+        ContentType.manga: "qbittorrent_manga_category",
+    }
+    key = key_map.get(content_type)
+    if not key:
+        return ""
+    return (await get_setting(db, key, "")).strip()
 
 
 def _normalize_path(path: str) -> str:
@@ -141,8 +185,13 @@ async def _finalize_completed_torrent(
         "progress": 1,
         "eta": 0,
         "speed": 0,
+        "upload_speed": 0,
         "state": "completed",
         "save_path": moved_path,
+        "hash": str(torrent.get("hash") or ""),
+        "category": str(torrent.get("category") or ""),
+        "size": int(torrent.get("size") or torrent.get("total_size") or 0),
+        "downloaded": int(torrent.get("downloaded") or torrent.get("completed") or 0),
     }
 
 
@@ -158,7 +207,7 @@ async def check_connection_inline(url: str, username: str, password: str) -> dic
     if not base_url:
         return {"connected": False, "error": "qBittorrent URL not configured"}
     try:
-        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=12, follow_redirects=True, headers=_webui_headers(base_url)) as client:
             if username and password:
                 login = await client.post(
                     f"{base_url}/api/v2/auth/login",
@@ -197,6 +246,7 @@ async def enqueue_download(
     username = await get_setting(db, "qbittorrent_username", "")
     password = await get_setting(db, "qbittorrent_password", "")
     qb_download_folder = await get_setting(db, "qbittorrent_download_folder", "/data/downloads")
+    category = await _category_for_content_type(db, content_type)
     if not base_url:
         return {"ok": False, "error": "qBittorrent URL not configured"}
 
@@ -221,14 +271,16 @@ async def enqueue_download(
             await db.commit()
 
     try:
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers=_webui_headers(base_url)) as client:
             await _login_client(client, base_url, username, password)
+            await _ensure_category_exists(client, base_url, category)
 
             add_resp = await client.post(
                 f"{base_url}/api/v2/torrents/add",
                 data={
                     "urls": source_url,
                     "savepath": qb_download_folder,
+                    "category": category,
                     "tags": _download_tag(download.id),
                 },
             )
@@ -241,6 +293,7 @@ async def enqueue_download(
             "destination": final_folder,
             "status": download.status,
             "queued_in": "qbittorrent",
+            "category": category,
         }
     except Exception as exc:
         download.status = "failed"
@@ -270,7 +323,7 @@ async def refresh_downloads(db: AsyncSession) -> dict[int, dict[str, Any]]:
     changed = False
 
     try:
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers=_webui_headers(base_url)) as client:
             await _login_client(client, base_url, username, password)
             torrents = await _fetch_torrents(client, base_url)
             torrents_by_download_id = {
@@ -292,8 +345,13 @@ async def refresh_downloads(db: AsyncSession) -> dict[int, dict[str, Any]]:
                         "progress": float(torrent.get("progress") or 0.0),
                         "eta": int(torrent.get("eta") or 0),
                         "speed": int(torrent.get("dlspeed") or 0),
+                        "upload_speed": int(torrent.get("upspeed") or 0),
                         "state": str(torrent.get("state") or "failed"),
                         "save_path": str(torrent.get("save_path") or ""),
+                        "hash": str(torrent.get("hash") or ""),
+                        "category": str(torrent.get("category") or ""),
+                        "size": int(torrent.get("size") or torrent.get("total_size") or 0),
+                        "downloaded": int(torrent.get("downloaded") or torrent.get("completed") or 0),
                     }
                     changed = True
                     continue
@@ -318,8 +376,13 @@ async def refresh_downloads(db: AsyncSession) -> dict[int, dict[str, Any]]:
                     "progress": progress,
                     "eta": int(torrent.get("eta") or 0),
                     "speed": int(torrent.get("dlspeed") or 0),
+                    "upload_speed": int(torrent.get("upspeed") or 0),
                     "state": str(torrent.get("state") or download.status),
                     "save_path": str(torrent.get("save_path") or ""),
+                    "hash": str(torrent.get("hash") or ""),
+                    "category": str(torrent.get("category") or ""),
+                    "size": int(torrent.get("size") or torrent.get("total_size") or 0),
+                    "downloaded": int(torrent.get("downloaded") or torrent.get("completed") or 0),
                 }
                 changed = True
     except Exception:
@@ -339,7 +402,7 @@ async def cancel_download(db: AsyncSession, download: DownloadItem) -> None:
         return
 
     try:
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers=_webui_headers(base_url)) as client:
             await _login_client(client, base_url, username, password)
             torrents = await _fetch_torrents(client, base_url)
             tag = _download_tag(download.id)

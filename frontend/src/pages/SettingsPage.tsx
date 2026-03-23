@@ -333,6 +333,36 @@ const SettingsPage: React.FC = () => {
               <span className="hint">Path as qBittorrent sees the staging downloads folder.</span>
             </div>
             <div className="form-field">
+              <label>Book Category</label>
+              <input
+                type="text"
+                placeholder="books"
+                value={form.qbittorrent_book_category ?? ''}
+                onChange={set('qbittorrent_book_category')}
+              />
+              <span className="hint">Assigned to book torrents. GhostShelf will create it if missing.</span>
+            </div>
+            <div className="form-field">
+              <label>Comic Category</label>
+              <input
+                type="text"
+                placeholder="comics"
+                value={form.qbittorrent_comic_category ?? ''}
+                onChange={set('qbittorrent_comic_category')}
+              />
+              <span className="hint">Assigned to comic torrents. GhostShelf will create it if missing.</span>
+            </div>
+            <div className="form-field">
+              <label>Manga Category</label>
+              <input
+                type="text"
+                placeholder="manga"
+                value={form.qbittorrent_manga_category ?? ''}
+                onChange={set('qbittorrent_manga_category')}
+              />
+              <span className="hint">Assigned to manga torrents. GhostShelf will create it if missing.</span>
+            </div>
+            <div className="form-field">
               <label>GhostShelf Local Downloads Folder</label>
               <input
                 type="text"

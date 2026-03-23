@@ -12,7 +12,6 @@ const nav: NavItem[] = [
 
 const integrations: NavItem[] = [
   { to: '/library',  icon: '📚', label: 'Library' },
-  { to: '/komga',    icon: '🧭', label: 'Komga' },
   { to: '/settings', icon: '⚙️',  label: 'Settings' },
 ];
 

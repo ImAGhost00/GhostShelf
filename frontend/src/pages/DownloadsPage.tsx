@@ -46,6 +46,14 @@ const DownloadsPage: React.FC = () => {
     return `${mib.toFixed(1)} MiB/s`;
   };
 
+  const formatBytes = (bytes?: number) => {
+    if (!bytes || bytes <= 0) return null;
+    const gib = 1024 * 1024 * 1024;
+    const mib = 1024 * 1024;
+    if (bytes >= gib) return `${(bytes / gib).toFixed(2)} GiB`;
+    return `${(bytes / mib).toFixed(1)} MiB`;
+  };
+
   const handleCancel = async (id: number) => {
     try {
       const updated = await updateDownloadStatus(id, 'cancelled');
@@ -76,6 +84,12 @@ const DownloadsPage: React.FC = () => {
           <span className={`tag ${item.content_type}`} style={{ fontSize: '0.65rem' }}>
             {item.content_type}
           </span>
+          {item.category && (
+            <>
+              {' '}
+              <span className="tag" style={{ fontSize: '0.65rem' }}>{item.category}</span>
+            </>
+          )}
           {' '}
           {item.download_url ? (
             <a href={item.download_url} target="_blank" rel="noopener noreferrer"
@@ -106,8 +120,18 @@ const DownloadsPage: React.FC = () => {
               <span>{Math.round(item.progress * 100)}%</span>
               {item.state && <span>{item.state}</span>}
               {formatSpeed(item.speed) && <span>{formatSpeed(item.speed)}</span>}
+              {formatSpeed(item.upload_speed) && <span>up {formatSpeed(item.upload_speed)}</span>}
               {formatEta(item.eta) && <span>{formatEta(item.eta)}</span>}
+              {formatBytes(item.downloaded) && item.size ? (
+                <span>{formatBytes(item.downloaded)} / {formatBytes(item.size)}</span>
+              ) : null}
             </div>
+            {(item.hash || item.save_path) && (
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-faint)', marginTop: '0.25rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                {item.hash && <span>hash {item.hash.slice(0, 12)}...</span>}
+                {item.save_path && <span>{item.save_path}</span>}
+              </div>
+            )}
           </div>
         )}
       </div>

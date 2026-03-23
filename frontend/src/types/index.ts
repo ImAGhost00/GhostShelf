@@ -45,8 +45,13 @@ export interface DownloadItem {
   progress?: number;
   eta?: number;
   speed?: number;
+  upload_speed?: number;
   state?: string;
   save_path?: string;
+  hash?: string;
+  category?: string;
+  size?: number;
+  downloaded?: number;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -114,6 +119,9 @@ export interface AppSettings {
   qbittorrent_url?: string;
   qbittorrent_username?: string;
   qbittorrent_password?: string;
+  qbittorrent_book_category?: string;
+  qbittorrent_comic_category?: string;
+  qbittorrent_manga_category?: string;
   qbittorrent_download_folder?: string;
   local_downloads_folder?: string;
 }

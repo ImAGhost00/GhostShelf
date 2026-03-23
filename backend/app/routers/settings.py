@@ -31,6 +31,9 @@ ALLOWED_KEYS = {
     "qbittorrent_url",
     "qbittorrent_username",
     "qbittorrent_password",
+    "qbittorrent_book_category",
+    "qbittorrent_comic_category",
+    "qbittorrent_manga_category",
     "qbittorrent_download_folder",
     "local_downloads_folder",
 }
