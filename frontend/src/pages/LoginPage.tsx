@@ -3,7 +3,8 @@ import { useToast } from '@/components/ToastProvider';
 import { useNavigate } from 'react-router-dom';
 
 const LoginPage: React.FC = () => {
-  const [wizarrToken, setWizarrToken] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -11,8 +12,8 @@ const LoginPage: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!wizarrToken.trim()) {
-      toast('Please enter your Wizarr token', 'error');
+    if (!username.trim() || !password) {
+      toast('Please enter your username and password', 'error');
       return;
     }
 
@@ -21,7 +22,7 @@ const LoginPage: React.FC = () => {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wizarr_token: wizarrToken }),
+        body: JSON.stringify({ username: username.trim(), password }),
       });
       
       if (!res.ok) {
@@ -67,13 +68,13 @@ const LoginPage: React.FC = () => {
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: '#555' }}>
-              Wizarr Token
+              Username
             </label>
             <input
-              type="password"
-              placeholder="Paste your Wizarr user token"
-              value={wizarrToken}
-              onChange={(e) => setWizarrToken(e.target.value)}
+              type="text"
+              placeholder="Enter the username you already use"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               disabled={loading}
               style={{
                 width: '100%',
@@ -85,8 +86,29 @@ const LoginPage: React.FC = () => {
               }}
             />
             <small style={{ color: '#999', marginTop: '0.5rem', display: 'block' }}>
-              Find your token in Wizarr → User Settings → API/Token
+              Use the same credentials you created through Wizarr.
             </small>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: '#555' }}>
+              Password
+            </label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '2px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '1rem',
+                boxSizing: 'border-box',
+              }}
+            />
           </div>
 
           <button

@@ -1,8 +1,4 @@
-"""
-Authentication endpoints for GhostShelf.
-
-Uses Wizarr's user database with token-based authentication.
-"""
+"""Authentication endpoints for GhostShelf using Wizarr-linked accounts."""
 from __future__ import annotations
 
 import jwt
@@ -14,7 +10,11 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.wizarr_models import get_wizarr_user_by_token, check_wizarr_db_accessible
+from app.wizarr_models import (
+    authenticate_wizarr_user,
+    check_wizarr_db_accessible,
+    get_wizarr_user_by_id,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -31,7 +31,8 @@ TOKEN_EXPIRE_HOURS = 168  # 1 week
 
 
 class LoginRequest(BaseModel):
-    wizarr_token: str
+    username: str
+    password: str
 
 
 class LoginResponse(BaseModel):
@@ -44,7 +45,6 @@ class CurrentUser(BaseModel):
     id: int
     username: str
     email: str | None
-    token: str  # Wizarr token
 
 
 def decode_access_token(token: str) -> dict | None:
@@ -71,7 +71,11 @@ async def get_current_user(authorization: str | None = Header(None)) -> CurrentU
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     
-    user = get_wizarr_user_by_token(payload.get("wizarr_token"))
+    user_id = payload.get("wizarr_user_id")
+    if not isinstance(user_id, int):
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    user = get_wizarr_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=401, detail="User not found or disabled")
     
@@ -79,30 +83,29 @@ async def get_current_user(authorization: str | None = Header(None)) -> CurrentU
         id=user.id,
         username=user.username,
         email=user.email,
-        token=user.token,
     )
 
 
 @router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
     """
-    Login with a Wizarr token.
-    
-    Exchanges a Wizarr user token for a GhostShelf JWT access token.
+    Login with the same username and password the user already uses upstream.
     """
-    # Verify Wizarr database is accessible
     if not check_wizarr_db_accessible():
         raise HTTPException(status_code=503, detail="Wizarr database not accessible")
-    
-    # Look up user in Wizarr database
-    user = get_wizarr_user_by_token(request.wizarr_token)
+
+    username = request.username.strip()
+    password = request.password
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Username and password are required")
+
+    user = await authenticate_wizarr_user(username, password)
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid Wizarr token or user disabled")
-    
-    # Create JWT access token
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
     expire = datetime.now(timezone.utc) + timedelta(hours=TOKEN_EXPIRE_HOURS)
     to_encode = {
-        "wizarr_token": user.token,
+        "wizarr_user_id": user.id,
         "sub": user.username,
         "exp": expire,
         "iat": datetime.now(timezone.utc),

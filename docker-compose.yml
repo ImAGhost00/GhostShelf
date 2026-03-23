@@ -1,8 +1,3 @@
-x-common_env: &common_env
-  PUID: ${PUID:-1000}
-  PGID: ${PGID:-1000}
-  TZ: ${TZ:-UTC}
-
 services:
   # GhostShelf Backend
   backend:
@@ -10,31 +5,31 @@ services:
     container_name: ghostshelf-backend
     restart: unless-stopped
     environment:
-      - DEBUG=${DEBUG:-false}
+      - DEBUG=false
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=sqlite+aiosqlite:////data/ghostshelf.db
-      - WIZARR_DB_PATH=${INSTALL_DIRECTORY:-/opt/ghostshelf}/config/wizarr/app.db
+      - WIZARR_DB_PATH=/wizarr-db/database.db
       - CORS_ORIGINS=http://localhost:4141,http://frontend,http://localhost:5690
-      - CWA_URL=${CWA_URL:-}
-      - KOMGA_URL=${KOMGA_URL:-}
-      - COMIC_INGEST_FOLDER=${MEDIA_DIRECTORY:-/media}/comics
-      - MANGA_INGEST_FOLDER=${MEDIA_DIRECTORY:-/media}/manga
-      - CWA_INGEST_FOLDER=${MEDIA_DIRECTORY:-/media}/book-ingest
-      - PROWLARR_URL=${PROWLARR_URL:-}
-      - PROWLARR_API_KEY=${PROWLARR_API_KEY:-}
-      - QBITTORRENT_URL=${QBITTORRENT_URL:-}
-      - QBITTORRENT_USERNAME=${QBITTORRENT_USERNAME:-}
-      - QBITTORRENT_PASSWORD=${QBITTORRENT_PASSWORD:-}
-      - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
-      - COMICVINE_API_KEY=${COMICVINE_API_KEY:-}
+      - CWA_URL=
+      - KOMGA_URL=
+      - COMIC_INGEST_FOLDER=/media/comics
+      - MANGA_INGEST_FOLDER=/media/manga
+      - CWA_INGEST_FOLDER=/media/book-ingest
+      - PROWLARR_URL=
+      - PROWLARR_API_KEY=
+      - QBITTORRENT_URL=
+      - QBITTORRENT_USERNAME=
+      - QBITTORRENT_PASSWORD=
+      - GOOGLE_BOOKS_API_KEY=
+      - COMICVINE_API_KEY=
     volumes:
       - ghostshelf-data:/data
-      # Read-only mount to Wizarr database for auth (optional)
-      - ${INSTALL_DIRECTORY:-/opt/ghostshelf}/config/wizarr:/wizarr-config:ro
+      # Read-only mount to Wizarr database for auth
+      - /opt/yams/config/wizarr/database:/wizarr-db:ro
       # Media directories
-      - ${MEDIA_DIRECTORY:-/media}/comics:/media/comics:ro
-      - ${MEDIA_DIRECTORY:-/media}/manga:/media/manga:ro
-      - ${MEDIA_DIRECTORY:-/media}/book-ingest:/media/book-ingest
+      - /media/MediaPool/comics:/media/comics
+      - /media/MediaPool/manga:/media/manga
+      - /media/MediaPool/book-ingest:/media/book-ingest
     ports:
       - "8001:8000"
     healthcheck:
