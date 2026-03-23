@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+import logging
 from typing import Optional
 
 from app.services import komga_service, cwa_service, prowlarr_service, qbittorrent_service
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends
 from pydantic import BaseModel
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
 
@@ -38,7 +40,8 @@ async def komga_libraries(db: AsyncSession = Depends(get_db)):
     try:
         return await komga_service.get_libraries(db)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.error(f"Failed to get Komga libraries: {type(exc).__name__}", exc_info=False)
+        raise HTTPException(status_code=502, detail="Unable to fetch Komga libraries") from exc
 
 
 @router.post("/komga/libraries/{library_id}/scan")
@@ -47,7 +50,8 @@ async def komga_scan(library_id: str, db: AsyncSession = Depends(get_db)):
     try:
         return await komga_service.scan_library(db, library_id)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.error(f"Failed to scan Komga library: {type(exc).__name__}", exc_info=False)
+        raise HTTPException(status_code=502, detail="Unable to scan library") from exc
 
 
 @router.get("/komga/series")
@@ -61,7 +65,8 @@ async def komga_series(
     try:
         return await komga_service.get_series(db, library_id, page, size)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.error(f"Failed to get Komga series: {type(exc).__name__}", exc_info=False)
+        raise HTTPException(status_code=502, detail="Unable to fetch series") from exc
 
 
 # ─── CWA ──────────────────────────────────────────────────────────────────────
@@ -98,7 +103,8 @@ async def prowlarr_status(db: AsyncSession = Depends(get_db)):
     try:
         return await prowlarr_service.check_connection(db)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.error(f"Prowlarr status check failed: {type(exc).__name__}", exc_info=False)
+        raise HTTPException(status_code=502, detail="Unable to check Prowlarr status") from exc
 
 
 class ProwlarrTestRequest(BaseModel):
@@ -119,7 +125,8 @@ async def prowlarr_test(body: ProwlarrTestRequest, db: AsyncSession = Depends(ge
     try:
         return await prowlarr_service.check_connection_inline(url, api_key)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.error(f"Prowlarr connection test failed: {type(exc).__name__}", exc_info=False)
+        raise HTTPException(status_code=502, detail="Unable to connect to Prowlarr") from exc
 
 
 # ─── qBittorrent ──────────────────────────────────────────────────────────────
@@ -130,7 +137,8 @@ async def qbittorrent_status(db: AsyncSession = Depends(get_db)):
     try:
         return await qbittorrent_service.check_connection(db)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.error(f"qBittorrent status check failed: {type(exc).__name__}", exc_info=False)
+        raise HTTPException(status_code=502, detail="Unable to check qBittorrent status") from exc
 
 
 class QbittorrentTestRequest(BaseModel):
@@ -153,4 +161,5 @@ async def qbittorrent_test(body: QbittorrentTestRequest, db: AsyncSession = Depe
     try:
         return await qbittorrent_service.check_connection_inline(url, username, password)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.error(f"qBittorrent connection test failed: {type(exc).__name__}", exc_info=False)
+        raise HTTPException(status_code=502, detail="Unable to connect to qBittorrent") from exc

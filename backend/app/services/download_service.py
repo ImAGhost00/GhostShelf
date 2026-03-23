@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import urllib.parse
+import logging
 from typing import Any
 
 import aiofiles
@@ -12,6 +13,8 @@ from sqlalchemy import select
 
 from app.models.models import ContentType, DownloadItem, WatchlistItem, ItemStatus
 from app.services.settings_store import get_setting
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_filename(name: str) -> str:
@@ -27,9 +30,50 @@ def _extension_from_url(url: str) -> str:
     return ext[:12] if ext else ""
 
 
+def _validate_destination_path(destination: str) -> bool:
+    """
+    Validate that destination path is safe and within allowed directories.
+    Prevents path traversal attacks by verifying resolved path is within expected roots.
+    """
+    if not destination:
+        return False
+    
+    # Resolve symlinks and relative paths
+    try:
+        real_dest = os.path.realpath(destination)
+    except (OSError, ValueError):
+        logger.warning(f"Failed to resolve destination path: {destination}")
+        return False
+    
+    # Get allowed root directories
+    allowed_roots = [
+        "/media/MediaPool/books",
+        "/media/MediaPool/book-ingest",
+        "/media/MediaPool/comics",
+        "/media/MediaPool/manga",
+    ]
+    
+    # Allow any path that starts with an allowed root (with proper separator)
+    for allowed_root in allowed_roots:
+        try:
+            real_root = os.path.realpath(allowed_root)
+            # Check if destination is within this root
+            if real_dest == real_root or real_dest.startswith(real_root + os.sep):
+                return True
+        except (OSError, ValueError):
+            continue
+    
+    logger.warning(f"Attempted download to path outside allowed directories: {destination}")
+    return False
+
+
 async def _target_folder(db: AsyncSession, content_type: ContentType, explicit_destination: str | None) -> str:
+    # If user provided a destination, validate it before using
     if explicit_destination:
+        if not _validate_destination_path(explicit_destination):
+            raise ValueError(f"Destination path is not allowed: {explicit_destination}")
         return explicit_destination
+    
     if content_type == ContentType.book:
         return await get_setting(db, "cwa_ingest_folder", "")
     if content_type == ContentType.comic:

@@ -9,20 +9,12 @@ Database location is configurable via WIZARR_DB_PATH env var.
 from __future__ import annotations
 
 import os
+import logging
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, select
 from sqlalchemy.orm import declarative_base, Session
 from datetime import datetime
 
-# Read-only connection to Wizarr database
-wizarr_db_path = os.getenv("WIZARR_DB_PATH", "/data/wizarr.db")
-wizarr_engine = create_engine(
-    f"sqlite:///{wizarr_db_path}",
-    connect_args={"check_same_thread": False},
-    echo=False,
-)
-
-Base = declarative_base()
-
+logger = logging.getLogger(__name__)
 
 class WizarrUser(Base):
     """
@@ -57,11 +49,13 @@ def get_wizarr_user_by_token(token: str) -> WizarrUser | None:
             if user and not user.is_disabled:
                 # Check expiry if set
                 if user.expires and datetime.now() > user.expires:
+                    logger.debug(f"User membership expired: {user.username}")
                     return None
                 return user
             return None
-    except Exception:
-        return None
+    except Exception as e:
+        logger.error(f"Error querying Wizarr database for user token: {type(e).__name__}", exc_info=False)
+        raise RuntimeError(f"Failed to authenticate user: database error") from e
 
 
 def check_wizarr_db_accessible() -> bool:
@@ -70,5 +64,6 @@ def check_wizarr_db_accessible() -> bool:
         with Session(wizarr_engine) as session:
             session.execute(select(1))
         return True
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Wizarr database not accessible: {type(e).__name__}")
         return False
