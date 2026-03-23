@@ -3,6 +3,7 @@ import {
   searchBooks,
   searchComics,
   addToWatchlist,
+  getDownloads,
   getWatchlist,
   startSmartAutoDownload,
 } from '@/services/api';
@@ -24,12 +25,36 @@ const SearchPage: React.FC = () => {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [autoId, setAutoId] = useState<string>('');
+  const [processingKeys, setProcessingKeys] = useState<Set<string>>(new Set());
+  const [activeDownloadKeys, setActiveDownloadKeys] = useState<Set<string>>(new Set());
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getWatchlist().then(setWatchlist).catch(() => {});
+  }, []);
+
+  const titleDownloadKey = (title: string, contentType: string) =>
+    `${contentType}-${title.trim().replace(/\s+/g, ' ').toLowerCase()}`;
+
+  const refreshActiveDownloads = async () => {
+    try {
+      const downloads = await getDownloads();
+      const active = new Set(
+        downloads
+          .filter(d => d.status === 'queued' || d.status === 'downloading')
+          .map(d => titleDownloadKey(d.title, d.content_type)),
+      );
+      setActiveDownloadKeys(active);
+    } catch {
+      // Keep existing state when polling fails.
+    }
+  };
+
+  useEffect(() => {
+    refreshActiveDownloads();
+    const timer = setInterval(refreshActiveDownloads, 5000);
+    return () => clearInterval(timer);
   }, []);
 
   // Reset source when mode changes
@@ -80,22 +105,33 @@ const SearchPage: React.FC = () => {
       w => w.source === item.source && w.source_id === item.source_id,
     );
 
-  const autoKey = (item: SearchResult) => `${item.source}-${item.source_id}-${item.content_type}`;
-
   const handleAutoDownload = async (item: SearchResult) => {
-    const key = autoKey(item);
-    setAutoId(key);
+    const key = titleDownloadKey(item.title, item.content_type);
+    if (processingKeys.has(key) || activeDownloadKeys.has(key)) {
+      return;
+    }
+
+    setProcessingKeys(prev => {
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
     try {
       await startSmartAutoDownload({
         title: item.title,
         content_type: item.content_type,
       });
-      toast(`Auto-download started for "${item.title}"`, 'success');
+      toast(`Processing "${item.title}" and queued in downloader`, 'success');
+      await refreshActiveDownloads();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Auto-download failed';
       toast(msg, 'error');
     } finally {
-      setAutoId('');
+      setProcessingKeys(prev => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
     }
   };
 
@@ -153,16 +189,22 @@ const SearchPage: React.FC = () => {
         )}
 
         <div className="results-grid">
-          {results.map((item, idx) => (
-            <ResultCard
-              key={`${item.source}-${item.source_id}-${idx}`}
-              item={item}
-              onAdd={handleAdd}
-              onAutoDownload={handleAutoDownload}
-              autoDownloading={autoId === autoKey(item)}
-              alreadyAdded={isAdded(item)}
-            />
-          ))}
+          {results.map((item, idx) => {
+            const key = titleDownloadKey(item.title, item.content_type);
+            const autoDownloading = processingKeys.has(key);
+            const isActiveDownload = activeDownloadKeys.has(key);
+            return (
+              <ResultCard
+                key={`${item.source}-${item.source_id}-${idx}`}
+                item={item}
+                onAdd={handleAdd}
+                onAutoDownload={handleAutoDownload}
+                autoDownloading={autoDownloading}
+                downloadDisabled={autoDownloading || isActiveDownload}
+                alreadyAdded={isAdded(item)}
+              />
+            );
+          })}
         </div>
 
         {!loading && results.length === 0 && !error && (

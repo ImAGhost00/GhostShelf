@@ -13,6 +13,7 @@ const WatchlistPage: React.FC = () => {
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
   const [loading, setLoading] = useState(true);
+  const [processingIds, setProcessingIds] = useState<Set<number>>(new Set());
 
   const load = () => {
     setLoading(true);
@@ -44,6 +45,10 @@ const WatchlistPage: React.FC = () => {
   };
 
   const handleDirectDownload = async (item: WatchlistItem) => {
+    if (item.status === 'downloading' || processingIds.has(item.id)) {
+      return;
+    }
+
     const input = window.prompt(
       `Paste direct URL and optional mirrors for ${item.title}\n` +
       `Format: primary_url, mirror_url_1, mirror_url_2`
@@ -55,6 +60,11 @@ const WatchlistPage: React.FC = () => {
       .filter(Boolean);
     if (parts.length === 0) return;
     const [url, ...mirrors] = parts;
+    setProcessingIds(prev => {
+      const next = new Set(prev);
+      next.add(item.id);
+      return next;
+    });
     try {
       await startDirectDownload({
         title: item.title,
@@ -67,10 +77,25 @@ const WatchlistPage: React.FC = () => {
       await handleStatusChange(item.id, 'downloading');
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : 'Direct download failed', 'error');
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
     }
   };
 
   const handleProwlarrDownload = async (item: WatchlistItem) => {
+    if (item.status === 'downloading' || processingIds.has(item.id)) {
+      return;
+    }
+
+    setProcessingIds(prev => {
+      const next = new Set(prev);
+      next.add(item.id);
+      return next;
+    });
     try {
       await startProwlarrAutoDownload({
         title: item.title,
@@ -81,6 +106,12 @@ const WatchlistPage: React.FC = () => {
       await handleStatusChange(item.id, 'downloading');
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : 'Prowlarr download failed', 'error');
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
     }
   };
 
@@ -118,7 +149,10 @@ const WatchlistPage: React.FC = () => {
         )}
 
         <div className="watchlist-list">
-          {filtered.map(item => (
+          {filtered.map(item => {
+            const isProcessing = processingIds.has(item.id);
+            const downloadsDisabled = item.status === 'downloading' || isProcessing;
+            return (
             <div key={item.id} className="watchlist-item">
               {item.cover_url ? (
                 <img className="watchlist-thumb" src={item.cover_url} alt={item.title} />
@@ -159,16 +193,18 @@ const WatchlistPage: React.FC = () => {
                 <button
                   className="btn btn-ghost btn-sm"
                   title="Auto-download from Prowlarr"
+                  disabled={downloadsDisabled}
                   onClick={() => handleProwlarrDownload(item)}
                 >
-                  Prowlarr
+                  {isProcessing ? 'Processing...' : item.status === 'downloading' ? 'Downloading...' : 'Prowlarr'}
                 </button>
                 <button
                   className="btn btn-ghost btn-sm"
                   title="Download from direct URL"
+                  disabled={downloadsDisabled}
                   onClick={() => handleDirectDownload(item)}
                 >
-                  Direct
+                  {isProcessing ? 'Processing...' : item.status === 'downloading' ? 'Downloading...' : 'Direct'}
                 </button>
                 <button
                   className="btn btn-danger btn-icon"
@@ -179,7 +215,8 @@ const WatchlistPage: React.FC = () => {
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </>

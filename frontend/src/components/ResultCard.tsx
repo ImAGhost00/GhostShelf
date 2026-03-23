@@ -6,6 +6,7 @@ interface Props {
   onAdd: (item: SearchResult) => void;
   onAutoDownload?: (item: SearchResult) => void;
   autoDownloading?: boolean;
+  downloadDisabled?: boolean;
   alreadyAdded?: boolean;
 }
 
@@ -15,7 +16,7 @@ const typeLabel: Record<string, string> = {
   manga: 'Manga',
 };
 
-const ResultCard: React.FC<Props> = ({ item, onAdd, onAutoDownload, autoDownloading, alreadyAdded }) => {
+const ResultCard: React.FC<Props> = ({ item, onAdd, onAutoDownload, autoDownloading, downloadDisabled, alreadyAdded }) => {
   const typeClass = item.content_type;
 
   return (
@@ -52,11 +53,11 @@ const ResultCard: React.FC<Props> = ({ item, onAdd, onAutoDownload, autoDownload
       <div className="card-actions">
         <button
           className="btn btn-ghost btn-sm"
-          disabled={autoDownloading}
+          disabled={downloadDisabled}
           onClick={() => onAutoDownload?.(item)}
           style={{ flex: 1 }}
         >
-          {autoDownloading ? 'Processing…' : 'Auto Download'}
+          {autoDownloading ? 'Processing...' : downloadDisabled ? 'Downloading...' : 'Auto Download'}
         </button>
         <button
           className={`btn btn-sm ${alreadyAdded ? 'btn-ghost' : 'btn-primary'}`}
