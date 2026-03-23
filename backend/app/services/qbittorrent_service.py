@@ -60,6 +60,38 @@ def _parse_download_id_from_tags(tags: str | None) -> int | None:
     return None
 
 
+def _normalize_title_for_match(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", (value or "").casefold()).strip()
+
+
+def _fallback_match_torrent_by_title(
+    download: DownloadItem,
+    torrents: list[dict[str, Any]],
+    used_hashes: set[str],
+) -> dict[str, Any] | None:
+    target = _normalize_title_for_match(download.title)
+    if not target:
+        return None
+
+    partial_matches: list[tuple[int, dict[str, Any]]] = []
+    for torrent in torrents:
+        torrent_hash = str(torrent.get("hash") or "")
+        if torrent_hash and torrent_hash in used_hashes:
+            continue
+        torrent_name = _normalize_title_for_match(str(torrent.get("name") or ""))
+        if not torrent_name:
+            continue
+        if torrent_name == target:
+            return torrent
+        if target in torrent_name or torrent_name in target:
+            partial_matches.append((abs(len(torrent_name) - len(target)), torrent))
+
+    if not partial_matches:
+        return None
+    partial_matches.sort(key=lambda item: item[0])
+    return partial_matches[0][1]
+
+
 async def _login_client(client: httpx.AsyncClient, base_url: str, username: str, password: str) -> None:
     if username and password:
         login = await client.post(
@@ -371,6 +403,7 @@ async def refresh_downloads(db: AsyncSession) -> dict[int, dict[str, Any]]:
         async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers=_webui_headers(base_url)) as client:
             await _login_client(client, base_url, username, password)
             torrents = await _fetch_torrents(client, base_url)
+            used_hashes: set[str] = set()
             torrents_by_download_id = {
                 download_id: torrent
                 for torrent in torrents
@@ -379,35 +412,53 @@ async def refresh_downloads(db: AsyncSession) -> dict[int, dict[str, Any]]:
 
             for download in downloads:
                 torrent = torrents_by_download_id.get(download.id)
+                if torrent:
+                    torrent_hash = str(torrent.get("hash") or "")
+                    if torrent_hash:
+                        used_hashes.add(torrent_hash)
+                else:
+                    torrent = _fallback_match_torrent_by_title(download, torrents, used_hashes)
+                    if torrent:
+                        torrent_hash = str(torrent.get("hash") or "")
+                        if torrent_hash:
+                            used_hashes.add(torrent_hash)
                 if not torrent:
                     continue
 
-                if _torrent_is_failed(torrent):
+                try:
+                    if _torrent_is_failed(torrent):
+                        download.status = "failed"
+                        download.error_message = str(torrent.get("state") or "Torrent failed")
+                        await _update_watchlist_status(db, download.watchlist_id, ItemStatus.failed)
+                        metadata[download.id] = _format_torrent_metadata(torrent, state_override="error")
+                        changed = True
+                        continue
+
+                    if _torrent_is_complete(torrent):
+                        metadata[download.id] = await _finalize_completed_torrent(
+                            client,
+                            base_url,
+                            db,
+                            download,
+                            torrent,
+                            qb_download_folder,
+                            local_downloads_folder,
+                        )
+                        changed = True
+                        continue
+
+                    progress = float(torrent.get("progress") or 0.0)
+                    download.status = "downloading" if progress > 0 else "queued"
+                    download.error_message = None
+                    metadata[download.id] = _format_torrent_metadata(torrent, state_override=str(torrent.get("state") or download.status))
+                    changed = True
+                except Exception as exc:
                     download.status = "failed"
-                    download.error_message = str(torrent.get("state") or "Torrent failed")
+                    download.error_message = str(exc)
                     await _update_watchlist_status(db, download.watchlist_id, ItemStatus.failed)
                     metadata[download.id] = _format_torrent_metadata(torrent, state_override="error")
+                    metadata[download.id]["state_label"] = "Error"
                     changed = True
-                    continue
-
-                if _torrent_is_complete(torrent):
-                    metadata[download.id] = await _finalize_completed_torrent(
-                        client,
-                        base_url,
-                        db,
-                        download,
-                        torrent,
-                        qb_download_folder,
-                        local_downloads_folder,
-                    )
-                    changed = True
-                    continue
-
-                progress = float(torrent.get("progress") or 0.0)
-                download.status = "downloading" if progress > 0 else "queued"
-                download.error_message = None
-                metadata[download.id] = _format_torrent_metadata(torrent, state_override=str(torrent.get("state") or download.status))
-                changed = True
     except Exception:
         return metadata
 
