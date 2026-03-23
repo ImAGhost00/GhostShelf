@@ -12,6 +12,18 @@ export interface SearchResult {
   year: string;
   genres: string[];
   isbn?: string;
+  available_sources?: string[];
+}
+
+export interface ReleaseSearchResult {
+  title: string;
+  indexer: string;
+  indexerId?: number;
+  guid: string;
+  downloadUrl: string;
+  publishDate: string;
+  size: number;
+  seeders: number;
 }
 
 export interface RequestItem {

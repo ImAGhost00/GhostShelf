@@ -245,7 +245,9 @@ async def smart_auto_download(body: SmartAutoRequest, db: AsyncSession = Depends
     await _ensure_not_already_owned(db, body.title, body.content_type)
     direct_attempt_error: str | None = None
 
-    direct_candidates = await find_direct_urls(body.title, body.content_type)
+    direct_candidates: list[dict] = []
+    if body.content_type == ContentType.book:
+        direct_candidates = await find_direct_urls(body.title, body.content_type)
     if direct_candidates:
         primary = direct_candidates[0]
         mirrors = [c["url"] for c in direct_candidates[1:6]]

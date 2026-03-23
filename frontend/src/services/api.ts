@@ -8,6 +8,7 @@ import type {
   KomgaLibrary,
   LibraryOverview,
   LibraryOwnedCheck,
+  ReleaseSearchResult,
 } from '@/types';
 
 const BASE = '/api';
@@ -112,6 +113,11 @@ export const startSmartAutoDownload = (data: {
   content_type: ContentType;
   watchlist_id?: number;
 }) => request('/downloads/auto', { method: 'POST', body: JSON.stringify(data) });
+
+export const searchProwlarrReleases = (q: string, content_type: ContentType, limit = 20) =>
+  request<{ query: string; total: number; results: ReleaseSearchResult[] }>(
+    `/downloads/prowlarr/search?q=${encodeURIComponent(q)}&content_type=${content_type}&limit=${limit}`,
+  );
 
 export const updateDownloadStatus = (id: number, status: string): Promise<DownloadItem> =>
   request(`/downloads/${id}/status?status=${status}`, { method: 'PATCH' });

@@ -13,12 +13,12 @@ router = APIRouter(prefix="/comics", tags=["comics"])
 @router.get("/search")
 async def search(
     q: str = Query(..., min_length=1, max_length=200, description="Search query"),
-    source: str = Query("all", description="Source: mangadex | comicvine | anilist | all"),
+    source: str = Query("prowlarr", description="Source: prowlarr"),
     content_type: str = Query("all", description="Type: comic | manga | all"),
     limit: int = Query(20, ge=1, le=40),
     db: AsyncSession = Depends(get_db),
 ):
-    """Search for comics and manga across configured sources."""
+    """Search comics and manga from Prowlarr and enrich metadata automatically."""
     try:
         results = await search_comics(db, q, source=source, content_type=content_type, limit=limit)
         return {"query": q, "source": source, "content_type": content_type, "total": len(results), "results": results}

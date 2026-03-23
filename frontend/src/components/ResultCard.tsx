@@ -5,8 +5,10 @@ interface Props {
   item: SearchResult;
   onAdd: (item: SearchResult) => void;
   onAutoDownload?: (item: SearchResult) => void;
+  onManualSearch?: (item: SearchResult) => void;
   autoDownloading?: boolean;
   downloadDisabled?: boolean;
+  manualSearching?: boolean;
   ownedLabel?: string | null;
   alreadyAdded?: boolean;
 }
@@ -17,8 +19,9 @@ const typeLabel: Record<string, string> = {
   manga: 'Manga',
 };
 
-const ResultCard: React.FC<Props> = ({ item, onAdd, onAutoDownload, autoDownloading, downloadDisabled, ownedLabel, alreadyAdded }) => {
+const ResultCard: React.FC<Props> = ({ item, onAdd, onAutoDownload, onManualSearch, autoDownloading, downloadDisabled, manualSearching, ownedLabel, alreadyAdded }) => {
   const typeClass = item.content_type;
+  const sourceLabels = item.available_sources?.length ? item.available_sources : [item.source];
 
   return (
     <div className="card">
@@ -41,24 +44,35 @@ const ResultCard: React.FC<Props> = ({ item, onAdd, onAutoDownload, autoDownload
         {item.author && <div className="card-author">{item.author}</div>}
         <div className="card-meta">
           {item.year && <span>{item.year} · </span>}
-          <span style={{ textTransform: 'capitalize' }}>{item.source?.replace('_', ' ')}</span>
+          <span style={{ textTransform: 'capitalize' }}>{(item.source || '').replace('_', ' ')}</span>
         </div>
         <div className="card-tags">
           <span className={`tag ${typeClass}`}>{typeLabel[item.content_type]}</span>
           {item.genres.slice(0, 2).map(g => (
             <span key={g} className="tag">{g}</span>
           ))}
+          {sourceLabels.map(source => (
+            <span key={source} className="tag">{source.replace(/_/g, ' ')}</span>
+          ))}
         </div>
       </div>
 
-      <div className="card-actions">
+      <div className="card-actions" style={{ flexWrap: 'wrap' }}>
         <button
           className="btn btn-ghost btn-sm"
           disabled={downloadDisabled}
           onClick={() => onAutoDownload?.(item)}
           style={{ flex: 1 }}
         >
-          {autoDownloading ? 'Processing...' : downloadDisabled ? (ownedLabel ? 'Already Owned' : 'Downloading...') : 'Auto Download'}
+          {autoDownloading ? 'Searching...' : downloadDisabled ? (ownedLabel ? 'Already Owned' : 'Downloading...') : 'Auto Search'}
+        </button>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => onManualSearch?.(item)}
+          disabled={manualSearching}
+          style={{ flex: 1 }}
+        >
+          {manualSearching ? 'Searching...' : 'Manual Search'}
         </button>
         <button
           className={`btn btn-sm ${alreadyAdded ? 'btn-ghost' : 'btn-primary'}`}

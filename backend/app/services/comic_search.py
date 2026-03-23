@@ -12,6 +12,8 @@ import httpx
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.models import ContentType
+from app.services.prowlarr_service import search_releases
 from app.services.settings_store import get_setting
 
 MANGADEX_BASE = "https://api.mangadex.org"
@@ -40,6 +42,7 @@ def _comic_obj(
         "cover_url": cover_url,
         "year": year,
         "genres": genres,
+        "available_sources": [source],
     }
 
 
@@ -235,33 +238,74 @@ async def search_comics(
     if not query:
         return []
 
-    wanted_manga = content_type in ("manga", "all")
-    wanted_comic = content_type in ("comic", "all")
+    target_content_type = ContentType.comic if content_type == "comic" else ContentType.manga
 
-    tasks: list[Any] = []
+    releases = await search_releases(db=db, query=query, content_type=target_content_type, limit=max(limit * 2, 25))
+    if not releases:
+        return []
 
-    if source == "mangadex" and wanted_manga:
-        return await _search_mangadex(query, limit)
-    if source == "comicvine" and wanted_comic:
-        return await _search_comicvine(db, query, limit)
-    if source == "anilist" and wanted_manga:
-        return await _search_anilist(query, limit)
-
-    # "all"
-    per = max(limit // 2, 5)
-    results: list[dict] = []
-    if wanted_manga:
+    metadata_candidates: list[dict[str, Any]] = []
+    if target_content_type == ContentType.comic:
         try:
-            results += await _search_mangadex(query, per)
+            metadata_candidates.extend(await _search_comicvine(db, query, limit))
+        except Exception:
+            pass
+    else:
+        try:
+            metadata_candidates.extend(await _search_mangadex(query, limit))
         except Exception:
             pass
         try:
-            results += await _search_anilist(query, per)
+            metadata_candidates.extend(await _search_anilist(query, limit))
         except Exception:
             pass
-    if wanted_comic:
-        try:
-            results += await _search_comicvine(db, query, per)
-        except Exception:
-            pass
-    return results
+
+    def normalize(value: str) -> str:
+        return " ".join(value.casefold().split())
+
+    def find_meta(title: str) -> dict[str, Any] | None:
+        target = normalize(title)
+        best = None
+        best_score = -1
+        for meta in metadata_candidates:
+            meta_title = normalize(str(meta.get("title", "")))
+            if not meta_title:
+                continue
+            score = 0
+            if target == meta_title:
+                score += 6
+            elif target in meta_title or meta_title in target:
+                score += 4
+            overlap = set(target.split()) & set(meta_title.split())
+            score += min(len(overlap), 3)
+            if score > best_score:
+                best_score = score
+                best = meta
+        return best if best_score >= 3 else None
+
+    merged: dict[str, dict[str, Any]] = {}
+    for release in releases:
+        release_title = str(release.get("title", "") or "").strip()
+        if not release_title:
+            continue
+        meta = find_meta(release_title)
+        title = str(meta.get("title") if meta else release_title)
+        key = normalize(title)
+        if key not in merged:
+            merged[key] = _comic_obj(
+                source="prowlarr",
+                source_id=str(release.get("guid", release_title)),
+                content_type=target_content_type.value,
+                title=title,
+                authors=[str(meta.get("author", ""))] if meta and meta.get("author") else [],
+                description=str(meta.get("description", "")) if meta else "",
+                cover_url=str(meta.get("cover_url", "")) if meta else "",
+                year=str(meta.get("year", "")) if meta else "",
+                genres=list(meta.get("genres", [])) if meta else [],
+            )
+        else:
+            sources = merged[key].setdefault("available_sources", [])
+            if "prowlarr" not in sources:
+                sources.append("prowlarr")
+
+    return list(merged.values())[:limit]

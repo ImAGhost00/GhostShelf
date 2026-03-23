@@ -6,17 +6,18 @@ import {
   getDownloads,
   getRequests,
   checkOwnedBatch,
+  searchProwlarrReleases,
+  startDirectDownload,
   startSmartAutoDownload,
 } from '@/services/api';
 import ResultCard from '@/components/ResultCard';
 import { useToast } from '@/components/ToastProvider';
-import type { SearchResult, RequestItem } from '@/types';
+import type { SearchResult, RequestItem, ReleaseSearchResult } from '@/types';
 
 type Mode = 'books' | 'comics' | 'manga';
 
-const BOOK_SOURCES  = ['all', 'open_library', 'google_books'];
-const COMIC_SOURCES = ['all', 'comicvine'];
-const MANGA_SOURCES = ['all', 'mangadex', 'anilist'];
+const BOOK_SOURCES = ['all', 'libgen', 'annas_archive', 'prowlarr'];
+const PROWLARR_ONLY = ['prowlarr'];
 
 const SearchPage: React.FC = () => {
   const { toast } = useToast();
@@ -27,9 +28,13 @@ const SearchPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [processingKeys, setProcessingKeys] = useState<Set<string>>(new Set());
+  const [manualLoadingKeys, setManualLoadingKeys] = useState<Set<string>>(new Set());
   const [activeDownloadKeys, setActiveDownloadKeys] = useState<Set<string>>(new Set());
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [ownedMap, setOwnedMap] = useState<Record<string, string>>({});
+  const [manualResults, setManualResults] = useState<ReleaseSearchResult[]>([]);
+  const [manualTarget, setManualTarget] = useState<SearchResult | null>(null);
+  const [manualError, setManualError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -87,14 +92,16 @@ const SearchPage: React.FC = () => {
 
   // Reset source when mode changes
   useEffect(() => {
-    setSource('all');
+    setSource(mode === 'books' ? 'all' : 'prowlarr');
     setResults([]);
     setError('');
+    setManualResults([]);
+    setManualTarget(null);
+    setManualError('');
   }, [mode]);
 
   const sources =
-    mode === 'books' ? BOOK_SOURCES :
-    mode === 'comics' ? COMIC_SOURCES : MANGA_SOURCES;
+    mode === 'books' ? BOOK_SOURCES : PROWLARR_ONLY;
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,7 +114,7 @@ const SearchPage: React.FC = () => {
       if (mode === 'books') {
         resp = await searchBooks(query, source);
       } else {
-        resp = await searchComics(query, source, mode === 'comics' ? 'comic' : 'manga');
+        resp = await searchComics(query, 'prowlarr', mode === 'comics' ? 'comic' : 'manga');
       }
       setResults(resp.results);
       if (resp.results.length === 0) setError('No results found. Try a different query or source.');
@@ -149,7 +156,7 @@ const SearchPage: React.FC = () => {
         title: item.title,
         content_type: item.content_type,
       });
-      toast(`Processing "${item.title}" and queued in downloader`, 'success');
+      toast(`Auto search queued "${item.title}"`, 'success');
       await refreshActiveDownloads();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Auto-download failed';
@@ -161,6 +168,59 @@ const SearchPage: React.FC = () => {
         return next;
       });
     }
+  };
+
+  const handleManualSearch = async (item: SearchResult) => {
+    const key = titleDownloadKey(item.title, item.content_type);
+    setManualLoadingKeys(prev => {
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+    setManualTarget(item);
+    setManualError('');
+    try {
+      const resp = await searchProwlarrReleases(item.title, item.content_type, 25);
+      setManualResults(resp.results);
+      if (resp.results.length === 0) {
+        setManualError('No Prowlarr releases found for this item.');
+      }
+    } catch (err: unknown) {
+      setManualResults([]);
+      setManualError(err instanceof Error ? err.message : 'Manual search failed');
+    } finally {
+      setManualLoadingKeys(prev => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
+
+  const handleManualDownload = async (release: ReleaseSearchResult) => {
+    if (!manualTarget) return;
+    try {
+      await startDirectDownload({
+        title: manualTarget.title,
+        content_type: manualTarget.content_type,
+        download_url: release.downloadUrl,
+      });
+      toast(`Queued release from ${release.indexer || 'Prowlarr'}`, 'success');
+      setManualResults([]);
+      setManualTarget(null);
+      setManualError('');
+      await refreshActiveDownloads();
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Failed to queue release', 'error');
+    }
+  };
+
+  const formatReleaseSize = (size: number) => {
+    if (!size || size <= 0) return 'Unknown size';
+    const gib = 1024 * 1024 * 1024;
+    const mib = 1024 * 1024;
+    if (size >= gib) return `${(size / gib).toFixed(2)} GiB`;
+    return `${(size / mib).toFixed(1)} MiB`;
   };
 
   return (
@@ -194,15 +254,17 @@ const SearchPage: React.FC = () => {
             value={query}
             onChange={e => setQuery(e.target.value)}
           />
-          <select
-            className="search-select"
-            value={source}
-            onChange={e => setSource(e.target.value)}
-          >
-            {sources.map(s => (
-              <option key={s} value={s}>{s === 'all' ? 'All Sources' : s.replace('_', ' ')}</option>
-            ))}
-          </select>
+          {sources.length > 1 && (
+            <select
+              className="search-select"
+              value={source}
+              onChange={e => setSource(e.target.value)}
+            >
+              {sources.map(s => (
+                <option key={s} value={s}>{s === 'all' ? 'All Sources' : s.replace('_', ' ')}</option>
+              ))}
+            </select>
+          )}
           <button type="submit" className="btn btn-primary" disabled={loading}>
             {loading ? <span className="spinner" /> : 'Search'}
           </button>
@@ -216,10 +278,46 @@ const SearchPage: React.FC = () => {
           </p>
         )}
 
+        {manualTarget && (
+          <div className="settings-section" style={{ marginTop: '1rem' }}>
+            <div className="section-header" style={{ marginBottom: '0.75rem' }}>
+              <h2 style={{ fontSize: '1rem', fontWeight: 700 }}>Manual Search: {manualTarget.title}</h2>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setManualTarget(null); setManualResults([]); setManualError(''); }}>
+                Close
+              </button>
+            </div>
+            {manualError && <div className="alert alert-error" style={{ marginBottom: '0.75rem' }}>{manualError}</div>}
+            {manualResults.length > 0 ? (
+              <div className="downloads-list" style={{ marginTop: 0 }}>
+                {manualResults.map((release, index) => (
+                  <div key={`${release.guid}-${index}`} className="download-item">
+                    <span className="download-status-icon">🛰️</span>
+                    <div className="download-info">
+                      <div className="download-title">{release.title}</div>
+                      <div className="download-detail" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        <span>{release.indexer || 'Indexer'}</span>
+                        <span>{formatReleaseSize(release.size)}</span>
+                        <span>{release.seeders > 0 ? `${release.seeders} seeders` : 'Seeders unknown'}</span>
+                        {release.publishDate && <span>{new Date(release.publishDate).toLocaleDateString()}</span>}
+                      </div>
+                    </div>
+                    <button className="btn btn-primary btn-sm" onClick={() => handleManualDownload(release)}>
+                      Download
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : !manualError ? (
+              <div style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>Searching indexers...</div>
+            ) : null}
+          </div>
+        )}
+
         <div className="results-grid">
           {results.map((item, idx) => {
             const key = titleDownloadKey(item.title, item.content_type);
             const autoDownloading = processingKeys.has(key);
+            const manualSearching = manualLoadingKeys.has(key);
             const isActiveDownload = activeDownloadKeys.has(key);
             const ownedLabel = ownedMap[key];
             return (
@@ -228,7 +326,9 @@ const SearchPage: React.FC = () => {
                 item={item}
                 onAdd={handleAdd}
                 onAutoDownload={handleAutoDownload}
+                onManualSearch={handleManualSearch}
                 autoDownloading={autoDownloading}
+                manualSearching={manualSearching}
                 downloadDisabled={autoDownloading || isActiveDownload || Boolean(ownedLabel)}
                 ownedLabel={ownedLabel || null}
                 alreadyAdded={isAdded(item)}
