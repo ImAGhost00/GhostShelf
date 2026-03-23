@@ -54,6 +54,13 @@ const DownloadsPage: React.FC = () => {
     return `${(bytes / mib).toFixed(1)} MiB`;
   };
 
+  const formatTimestamp = (value?: string | null) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleString();
+  };
+
   const handleCancel = async (id: number) => {
     try {
       const updated = await updateDownloadStatus(id, 'cancelled');
@@ -72,8 +79,12 @@ const DownloadsPage: React.FC = () => {
     }
   };
 
-  const active = items.filter(i => i.status === 'queued' || i.status === 'downloading');
-  const done   = items.filter(i => i.status === 'done' || i.status === 'cancelled' || i.status === 'failed');
+  const active = [...items]
+    .filter(i => i.status === 'queued' || i.status === 'downloading')
+    .sort((a, b) => (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''));
+  const done = [...items]
+    .filter(i => i.status === 'done' || i.status === 'cancelled' || i.status === 'failed')
+    .sort((a, b) => (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''));
 
   const renderItem = (item: DownloadItem) => (
     <div key={item.id} className="download-item">
@@ -83,6 +94,10 @@ const DownloadsPage: React.FC = () => {
         <div className="download-detail">
           <span className={`tag ${item.content_type}`} style={{ fontSize: '0.65rem' }}>
             {item.content_type}
+          </span>
+          {' '}
+          <span className={`badge badge-${item.status === 'done' ? 'downloaded' : item.status === 'failed' ? 'failed' : item.status === 'cancelled' ? 'failed' : 'downloading'}`}>
+            {item.status === 'done' ? 'completed' : item.status}
           </span>
           {item.category && (
             <>
@@ -105,7 +120,7 @@ const DownloadsPage: React.FC = () => {
             </span>
           )}
         </div>
-        {typeof item.progress === 'number' && item.status !== 'done' && item.status !== 'failed' && item.status !== 'cancelled' && (
+        {typeof item.progress === 'number' && (
           <div style={{ marginTop: '0.45rem' }}>
             <div style={{ height: '8px', background: 'var(--surface-3)', borderRadius: '999px', overflow: 'hidden' }}>
               <div
@@ -134,6 +149,12 @@ const DownloadsPage: React.FC = () => {
             )}
           </div>
         )}
+        <div style={{ fontSize: '0.72rem', color: 'var(--text-faint)', marginTop: '0.35rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          {formatTimestamp(item.created_at) && <span>Queued {formatTimestamp(item.created_at)}</span>}
+          {item.status === 'done' && formatTimestamp(item.updated_at) && <span>Completed {formatTimestamp(item.updated_at)}</span>}
+          {item.status === 'failed' && formatTimestamp(item.updated_at) && <span>Failed {formatTimestamp(item.updated_at)}</span>}
+          {item.status === 'cancelled' && formatTimestamp(item.updated_at) && <span>Cancelled {formatTimestamp(item.updated_at)}</span>}
+        </div>
       </div>
       <div style={{ display: 'flex', gap: '0.35rem' }}>
         {(item.status === 'queued' || item.status === 'downloading') && (
