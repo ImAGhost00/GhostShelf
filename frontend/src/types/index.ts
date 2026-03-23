@@ -59,11 +59,16 @@ export interface DownloadItem {
   speed?: number;
   upload_speed?: number;
   state?: string;
+  state_label?: string;
   save_path?: string;
   hash?: string;
   category?: string;
   size?: number;
   downloaded?: number;
+  amount_left?: number;
+  seeders?: number;
+  leechers?: number;
+  ratio?: number;
   created_at: string | null;
   updated_at: string | null;
 }

@@ -16,6 +16,26 @@ from app.services.settings_store import get_setting
 
 TAG_PREFIX = "ghostshelf-"
 
+QBITTORRENT_STATE_LABELS = {
+    "error": "Error",
+    "missingfiles": "Missing files",
+    "uploading": "Seeding",
+    "pausedUP": "Paused seeding",
+    "queuedUP": "Queued for seeding",
+    "stalledUP": "Seeding stalled",
+    "checkingUP": "Checking files",
+    "forcedUP": "Forced seeding",
+    "allocating": "Allocating disk space",
+    "checkingDL": "Checking files",
+    "checkingResumeData": "Checking resume data",
+    "downloading": "Downloading",
+    "metaDL": "Downloading metadata",
+    "pausedDL": "Paused",
+    "queuedDL": "Queued",
+    "stalledDL": "Download stalled",
+    "forcedDL": "Forced download",
+}
+
 
 def _webui_headers(base_url: str) -> dict[str, str]:
     parsed = urlsplit(base_url)
@@ -111,6 +131,31 @@ def _torrent_is_failed(torrent: dict[str, Any]) -> bool:
     return "error" in state or "missingfiles" in state
 
 
+def _format_torrent_metadata(
+    torrent: dict[str, Any],
+    *,
+    state_override: str | None = None,
+) -> dict[str, Any]:
+    state = str(state_override or torrent.get("state") or "")
+    return {
+        "progress": float(torrent.get("progress") or 0.0),
+        "eta": int(torrent.get("eta") or 0),
+        "speed": int(torrent.get("dlspeed") or 0),
+        "upload_speed": int(torrent.get("upspeed") or 0),
+        "state": state,
+        "state_label": QBITTORRENT_STATE_LABELS.get(state, state.replace("_", " ").strip() or "Unknown"),
+        "save_path": str(torrent.get("save_path") or ""),
+        "hash": str(torrent.get("hash") or ""),
+        "category": str(torrent.get("category") or ""),
+        "size": int(torrent.get("total_size") or torrent.get("size") or 0),
+        "downloaded": int(torrent.get("downloaded") or torrent.get("completed") or 0),
+        "amount_left": int(torrent.get("amount_left") or 0),
+        "seeders": int(torrent.get("num_seeds") or torrent.get("num_complete") or 0),
+        "leechers": int(torrent.get("num_leechs") or torrent.get("num_incomplete") or 0),
+        "ratio": float(torrent.get("ratio") or 0.0),
+    }
+
+
 def _unique_target_path(base_dir: str, name: str) -> str:
     candidate = os.path.join(base_dir, name)
     if not os.path.exists(candidate):
@@ -182,16 +227,13 @@ async def _finalize_completed_torrent(
     await _update_watchlist_status(db, download.watchlist_id, ItemStatus.downloaded)
 
     return {
+        **_format_torrent_metadata(torrent, state_override="completed"),
         "progress": 1,
         "eta": 0,
         "speed": 0,
         "upload_speed": 0,
-        "state": "completed",
         "save_path": moved_path,
-        "hash": str(torrent.get("hash") or ""),
-        "category": str(torrent.get("category") or ""),
-        "size": int(torrent.get("size") or torrent.get("total_size") or 0),
-        "downloaded": int(torrent.get("downloaded") or torrent.get("completed") or 0),
+        "state_label": "Completed",
     }
 
 
@@ -344,18 +386,7 @@ async def refresh_downloads(db: AsyncSession) -> dict[int, dict[str, Any]]:
                     download.status = "failed"
                     download.error_message = str(torrent.get("state") or "Torrent failed")
                     await _update_watchlist_status(db, download.watchlist_id, ItemStatus.failed)
-                    metadata[download.id] = {
-                        "progress": float(torrent.get("progress") or 0.0),
-                        "eta": int(torrent.get("eta") or 0),
-                        "speed": int(torrent.get("dlspeed") or 0),
-                        "upload_speed": int(torrent.get("upspeed") or 0),
-                        "state": str(torrent.get("state") or "failed"),
-                        "save_path": str(torrent.get("save_path") or ""),
-                        "hash": str(torrent.get("hash") or ""),
-                        "category": str(torrent.get("category") or ""),
-                        "size": int(torrent.get("size") or torrent.get("total_size") or 0),
-                        "downloaded": int(torrent.get("downloaded") or torrent.get("completed") or 0),
-                    }
+                    metadata[download.id] = _format_torrent_metadata(torrent, state_override="error")
                     changed = True
                     continue
 
@@ -375,18 +406,7 @@ async def refresh_downloads(db: AsyncSession) -> dict[int, dict[str, Any]]:
                 progress = float(torrent.get("progress") or 0.0)
                 download.status = "downloading" if progress > 0 else "queued"
                 download.error_message = None
-                metadata[download.id] = {
-                    "progress": progress,
-                    "eta": int(torrent.get("eta") or 0),
-                    "speed": int(torrent.get("dlspeed") or 0),
-                    "upload_speed": int(torrent.get("upspeed") or 0),
-                    "state": str(torrent.get("state") or download.status),
-                    "save_path": str(torrent.get("save_path") or ""),
-                    "hash": str(torrent.get("hash") or ""),
-                    "category": str(torrent.get("category") or ""),
-                    "size": int(torrent.get("size") or torrent.get("total_size") or 0),
-                    "downloaded": int(torrent.get("downloaded") or torrent.get("completed") or 0),
-                }
+                metadata[download.id] = _format_torrent_metadata(torrent, state_override=str(torrent.get("state") or download.status))
                 changed = True
     except Exception:
         return metadata

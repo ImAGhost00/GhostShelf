@@ -54,6 +54,18 @@ const DownloadsPage: React.FC = () => {
     return `${(bytes / mib).toFixed(1)} MiB`;
   };
 
+  const progressPercent = (item: DownloadItem) => {
+    const progress = typeof item.progress === 'number' ? item.progress : item.status === 'done' ? 1 : 0;
+    return Math.max(0, Math.min(100, Math.round(progress * 100)));
+  };
+
+  const progressColor = (item: DownloadItem) => {
+    if (item.status === 'failed' || item.status === 'cancelled') return 'linear-gradient(90deg, #8f2d56 0%, #d1495b 100%)';
+    if (item.status === 'done') return 'linear-gradient(90deg, #2d6a4f 0%, #74c69d 100%)';
+    if (item.state === 'stalledDL' || item.state === 'metaDL') return 'linear-gradient(90deg, #b08900 0%, #ffcb77 100%)';
+    return 'linear-gradient(90deg, #1f7a8c 0%, #7bd389 100%)';
+  };
+
   const formatTimestamp = (value?: string | null) => {
     if (!value) return null;
     const date = new Date(value);
@@ -120,26 +132,38 @@ const DownloadsPage: React.FC = () => {
             </span>
           )}
         </div>
-        {typeof item.progress === 'number' && (
+        {(typeof item.progress === 'number' || item.status === 'queued' || item.status === 'downloading' || item.status === 'done') && (
           <div style={{ marginTop: '0.45rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'center', marginBottom: '0.3rem' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                qBittorrent status: {item.state_label || item.state || (item.status === 'done' ? 'Completed' : item.status)}
+              </span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                {progressPercent(item)}%
+              </span>
+            </div>
             <div style={{ height: '8px', background: 'var(--surface-3)', borderRadius: '999px', overflow: 'hidden' }}>
               <div
                 style={{
-                  width: `${Math.max(0, Math.min(100, item.progress * 100))}%`,
+                  width: `${progressPercent(item)}%`,
                   height: '100%',
-                  background: 'linear-gradient(90deg, #1f7a8c 0%, #7bd389 100%)',
+                  background: progressColor(item),
+                  transition: 'width 240ms ease',
                 }}
               />
             </div>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <span>{Math.round(item.progress * 100)}%</span>
-              {item.state && <span>{item.state}</span>}
+              {item.state_label && <span>{item.state_label}</span>}
               {formatSpeed(item.speed) && <span>{formatSpeed(item.speed)}</span>}
               {formatSpeed(item.upload_speed) && <span>up {formatSpeed(item.upload_speed)}</span>}
               {formatEta(item.eta) && <span>{formatEta(item.eta)}</span>}
               {formatBytes(item.downloaded) && item.size ? (
                 <span>{formatBytes(item.downloaded)} / {formatBytes(item.size)}</span>
               ) : null}
+              {formatBytes(item.amount_left) && item.status !== 'done' ? <span>{formatBytes(item.amount_left)} left</span> : null}
+              {typeof item.seeders === 'number' ? <span>{item.seeders} seeders</span> : null}
+              {typeof item.leechers === 'number' ? <span>{item.leechers} peers</span> : null}
+              {typeof item.ratio === 'number' && item.ratio > 0 ? <span>ratio {item.ratio.toFixed(2)}</span> : null}
             </div>
             {(item.hash || item.save_path) && (
               <div style={{ fontSize: '0.7rem', color: 'var(--text-faint)', marginTop: '0.25rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
