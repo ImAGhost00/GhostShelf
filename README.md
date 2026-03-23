@@ -39,9 +39,45 @@ docker compose up -d
 # UI  → http://localhost:4141
 # API → http://localhost:8001/docs
 
-# 4. Configure integrations in the app UI
+# 4. Login with default admin user
+#    Token: Check logs with: docker logs ghostshelf-backend | grep "admin"
+#    Or run: docker exec ghostshelf-backend python -m app.init_admin
+
+# 5. Configure integrations in the app UI
 #    Settings -> add CWA, Komga, qBittorrent, Prowlarr, and API keys
 ```
+
+---
+
+## Authentication
+
+GhostShelf uses **Wizarr** as its authentication provider. The app reads from Wizarr's user database, ensuring consistent user management across your entire media server ecosystem.
+
+### Default Admin User
+
+On first startup, GhostShelf automatically creates a default admin user. Find the token in the startup logs:
+
+```bash
+docker logs ghostshelf-backend | grep "admin"
+```
+
+Output will show:
+```
+✓ Created default admin user
+  Username: admin
+  Token: <uuid-token>
+  Email: admin@ghostshelf.local
+```
+
+Use this token to log in to GhostShelf. After logging in, manage users through your Wizarr instance.
+
+### Login Flow
+
+1. User obtains their Wizarr token from **Wizarr → User Settings → API/Token**
+2. Paste token into GhostShelf login page
+3. GhostShelf exchanges token for a JWT access token
+4. JWT is stored in browser localStorage and included with all API requests
+5. Token expires after 7 days; user must log in again
 
 ---
 
@@ -92,14 +128,13 @@ Environment variables in `.env` are optional fallback values and are no longer r
 | `CWA_INGEST_FOLDER` | Path to the CWA ingest watch folder |
 | `COMIC_INGEST_FOLDER` | Path for comic downloads |
 | `MANGA_INGEST_FOLDER` | Path for manga downloads |
-| `KOMGA_URL` | Base URL of your Komga instance |
-| `KOMGA_USERNAME` | Komga login email |
-| `KOMGA_PASSWORD` | Komga login password |
+| `KOMGA_URL` | Base URL of your Komga instance *(accessed via Wizarr auth)* |
 | `QBITTORRENT_URL` | Base URL of your qBittorrent Web UI |
 | `QBITTORRENT_USERNAME` | qBittorrent username |
 | `QBITTORRENT_PASSWORD` | qBittorrent password |
 | `GOOGLE_BOOKS_API_KEY` | *(Optional)* Google Books key for higher quota |
 | `COMICVINE_API_KEY` | ComicVine API key — needed for Western comics search |
+| `WIZARR_DB_PATH` | *(Docker only)* Path to Wizarr's database (mounted as `/wizarr-config/app.db`) |
 
 ---
 

@@ -35,10 +35,8 @@ class Settings(BaseSettings):
     comic_ingest_folder: str = ""
     manga_ingest_folder: str = ""
 
-    # Komga settings
+    # Komga settings (authentication via Wizarr)
     komga_url: str = ""
-    komga_username: str = ""
-    komga_password: str = ""
 
     # Prowlarr settings
     prowlarr_url: str = ""

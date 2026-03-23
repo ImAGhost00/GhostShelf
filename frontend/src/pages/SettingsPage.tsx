@@ -61,9 +61,13 @@ const SettingsPage: React.FC = () => {
   const testKomga = async () => {
     setKomgaStatus(null);
     try {
-        const r = await testKomgaConnection({
-          url: form.komga_url ?? '',
-
+      const r = await testKomgaConnection({
+        url: form.komga_url ?? '',
+      });
+      setKomgaStatus(r);
+    } catch {
+      setKomgaStatus({ connected: false, error: 'Request failed' });
+    }
   };
 
   const testProwlarr = async () => {

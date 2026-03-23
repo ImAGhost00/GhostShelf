@@ -58,8 +58,6 @@ export interface AppSettings {
   comic_ingest_folder?: string;
   manga_ingest_folder?: string;
   komga_url?: string;
-  komga_username?: string;
-  komga_password?: string;
   google_books_api_key?: string;
   comicvine_api_key?: string;
   prowlarr_url?: string;

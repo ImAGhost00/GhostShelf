@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import init_db
+from app.init_admin import init_admin
 from app.routers import auth, books, comics, watchlist, downloads, integrations, settings as settings_router
 from app.routers.auth import get_current_user
 
@@ -13,6 +14,12 @@ _settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    # Initialize default admin user if Wizarr DB is accessible
+    try:
+        init_admin()
+    except Exception as e:
+        # Don't fail startup if Wizarr DB is not ready yet
+        print(f"Warning: Could not initialize admin user: {e}")
     yield
 
 
