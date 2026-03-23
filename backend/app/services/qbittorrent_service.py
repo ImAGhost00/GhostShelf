@@ -14,15 +14,13 @@ from app.models.models import ContentType, DownloadItem, ItemStatus, WatchlistIt
 from app.services.download_service import get_download_target_folder
 from app.services.settings_store import get_setting
 
-TAG_PREFIX = "ghostshelf-"
-
 QBITTORRENT_STATE_LABELS = {
     "error": "Error",
     "missingfiles": "Missing files",
     "uploading": "Seeding",
     "pausedUP": "Paused seeding",
     "queuedUP": "Queued for seeding",
-    "stalledUP": "Seeding stalled",
+    "stalledUP": "Stalled",
     "checkingUP": "Checking files",
     "forcedUP": "Forced seeding",
     "allocating": "Allocating disk space",
@@ -32,7 +30,7 @@ QBITTORRENT_STATE_LABELS = {
     "metaDL": "Downloading metadata",
     "pausedDL": "Paused",
     "queuedDL": "Queued",
-    "stalledDL": "Download stalled",
+    "stalledDL": "Stalled",
     "forcedDL": "Forced download",
 }
 
@@ -44,20 +42,6 @@ def _webui_headers(base_url: str) -> dict[str, str]:
         "Origin": origin,
         "Referer": f"{origin}/",
     }
-
-
-def _download_tag(download_id: int) -> str:
-    return f"{TAG_PREFIX}{download_id}"
-
-
-def _parse_download_id_from_tags(tags: str | None) -> int | None:
-    for tag in (tags or "").split(","):
-        clean = tag.strip()
-        if clean.startswith(TAG_PREFIX):
-            suffix = clean[len(TAG_PREFIX):]
-            if suffix.isdigit():
-                return int(suffix)
-    return None
 
 
 def _normalize_title_for_match(value: str) -> str:
@@ -356,7 +340,6 @@ async def enqueue_download(
                     "urls": source_url,
                     "savepath": qb_download_folder,
                     "category": category,
-                    "tags": _download_tag(download.id),
                     "autoTMM": auto_tmm,
                 },
             )
@@ -404,24 +387,13 @@ async def refresh_downloads(db: AsyncSession) -> dict[int, dict[str, Any]]:
             await _login_client(client, base_url, username, password)
             torrents = await _fetch_torrents(client, base_url)
             used_hashes: set[str] = set()
-            torrents_by_download_id = {
-                download_id: torrent
-                for torrent in torrents
-                if (download_id := _parse_download_id_from_tags(torrent.get("tags"))) is not None
-            }
 
             for download in downloads:
-                torrent = torrents_by_download_id.get(download.id)
+                torrent = _fallback_match_torrent_by_title(download, torrents, used_hashes)
                 if torrent:
                     torrent_hash = str(torrent.get("hash") or "")
                     if torrent_hash:
                         used_hashes.add(torrent_hash)
-                else:
-                    torrent = _fallback_match_torrent_by_title(download, torrents, used_hashes)
-                    if torrent:
-                        torrent_hash = str(torrent.get("hash") or "")
-                        if torrent_hash:
-                            used_hashes.add(torrent_hash)
                 if not torrent:
                     continue
 
