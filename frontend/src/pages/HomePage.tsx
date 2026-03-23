@@ -1,24 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getWatchlist, getDownloads, getCwaStatus, getKomgaStatus } from '@/services/api';
-import type { WatchlistItem, DownloadItem } from '@/types';
+import { getRequests, getDownloads, getCwaStatus, getKomgaStatus } from '@/services/api';
+import type { RequestItem, DownloadItem } from '@/types';
 
 const HomePage: React.FC = () => {
-  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [requests, setRequests] = useState<RequestItem[]>([]);
   const [downloads, setDownloads] = useState<DownloadItem[]>([]);
   const [cwaOk, setCwaOk] = useState<boolean | null>(null);
   const [komgaOk, setKomgaOk] = useState<boolean | null>(null);
 
   useEffect(() => {
-    getWatchlist().then(setWatchlist).catch(() => {});
+    getRequests().then(setRequests).catch(() => {});
     getDownloads().then(setDownloads).catch(() => {});
     getCwaStatus().then(r => setCwaOk(r.connected)).catch(() => setCwaOk(false));
     getKomgaStatus().then(r => setKomgaOk(r.connected)).catch(() => setKomgaOk(false));
   }, []);
 
-  const books  = watchlist.filter(i => i.content_type === 'book').length;
-  const comics = watchlist.filter(i => i.content_type === 'comic').length;
-  const manga  = watchlist.filter(i => i.content_type === 'manga').length;
+  const books  = requests.filter(i => i.content_type === 'book').length;
+  const comics = requests.filter(i => i.content_type === 'comic').length;
+  const manga  = requests.filter(i => i.content_type === 'manga').length;
   const active = downloads.filter(d => d.status === 'queued' || d.status === 'downloading').length;
 
   const chip = (ok: boolean | null, label: string) => {
@@ -52,8 +52,8 @@ const HomePage: React.FC = () => {
         <div className="stat-grid">
           <div className="stat-card">
             <span className="stat-icon">📖</span>
-            <span className="stat-value">{books}</span>
-            <span className="stat-label">Books tracked</span>
+            <span className="stat-value">{requests.length}</span>
+            <span className="stat-label">Total requests</span>
           </div>
           <div className="stat-card">
             <span className="stat-icon">🦸</span>
@@ -72,8 +72,8 @@ const HomePage: React.FC = () => {
           </div>
           <div className="stat-card">
             <span className="stat-icon">👁️</span>
-            <span className="stat-value">{watchlist.length}</span>
-            <span className="stat-label">Total watchlist</span>
+            <span className="stat-value">{requests.length}</span>
+            <span className="stat-label">Total requests</span>
           </div>
         </div>
 
@@ -89,21 +89,22 @@ const HomePage: React.FC = () => {
           <h2 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1rem' }}>Quick Actions</h2>
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
             <Link to="/search" className="btn btn-primary">🔍 Search Books &amp; Comics</Link>
-            <Link to="/watchlist" className="btn btn-ghost">👁️ View Watchlist</Link>
+            <Link to="/requests" className="btn btn-ghost">📝 View Request List</Link>
+            <Link to="/library" className="btn btn-ghost">📚 View Library</Link>
             <Link to="/downloads" className="btn btn-ghost">⬇️ Manage Downloads</Link>
             <Link to="/settings" className="btn btn-ghost">⚙️ Configure</Link>
           </div>
         </div>
 
-        {/* Recent watchlist */}
-        {watchlist.length > 0 && (
+        {/* Recent requests */}
+        {requests.length > 0 && (
           <div style={{ marginTop: '1.5rem' }}>
             <div className="section-header">
-              <h2 style={{ fontSize: '1rem', fontWeight: 700 }}>Recently Added</h2>
-              <Link to="/watchlist" className="btn btn-ghost btn-sm">View all</Link>
+              <h2 style={{ fontSize: '1rem', fontWeight: 700 }}>Recent Requests</h2>
+              <Link to="/requests" className="btn btn-ghost btn-sm">View all</Link>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {watchlist.slice(0, 5).map(item => (
+              {requests.slice(0, 5).map(item => (
                 <div key={item.id} className="watchlist-item">
                   {item.cover_url ? (
                     <img className="watchlist-thumb" src={item.cover_url} alt={item.title} />

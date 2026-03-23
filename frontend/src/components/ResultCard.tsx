@@ -7,6 +7,7 @@ interface Props {
   onAutoDownload?: (item: SearchResult) => void;
   autoDownloading?: boolean;
   downloadDisabled?: boolean;
+  ownedLabel?: string | null;
   alreadyAdded?: boolean;
 }
 
@@ -16,7 +17,7 @@ const typeLabel: Record<string, string> = {
   manga: 'Manga',
 };
 
-const ResultCard: React.FC<Props> = ({ item, onAdd, onAutoDownload, autoDownloading, downloadDisabled, alreadyAdded }) => {
+const ResultCard: React.FC<Props> = ({ item, onAdd, onAutoDownload, autoDownloading, downloadDisabled, ownedLabel, alreadyAdded }) => {
   const typeClass = item.content_type;
 
   return (
@@ -57,7 +58,7 @@ const ResultCard: React.FC<Props> = ({ item, onAdd, onAutoDownload, autoDownload
           onClick={() => onAutoDownload?.(item)}
           style={{ flex: 1 }}
         >
-          {autoDownloading ? 'Processing...' : downloadDisabled ? 'Downloading...' : 'Auto Download'}
+          {autoDownloading ? 'Processing...' : downloadDisabled ? (ownedLabel ? 'Already Owned' : 'Downloading...') : 'Auto Download'}
         </button>
         <button
           className={`btn btn-sm ${alreadyAdded ? 'btn-ghost' : 'btn-primary'}`}
@@ -65,9 +66,15 @@ const ResultCard: React.FC<Props> = ({ item, onAdd, onAutoDownload, autoDownload
           onClick={() => onAdd(item)}
           style={{ flex: 1 }}
         >
-          {alreadyAdded ? '✓ Added' : '+ Watchlist'}
+          {alreadyAdded ? '✓ Requested' : '+ Request'}
         </button>
       </div>
+
+      {ownedLabel && (
+        <div style={{ padding: '0 0.75rem 0.75rem', fontSize: '0.72rem', color: 'var(--green)' }}>
+          In library: {ownedLabel}
+        </div>
+      )}
     </div>
   );
 };

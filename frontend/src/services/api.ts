@@ -1,11 +1,13 @@
 import type {
   SearchResult,
-  WatchlistItem,
+  RequestItem,
   DownloadItem,
   AppSettings,
   ContentType,
   ItemStatus,
   KomgaLibrary,
+  LibraryOverview,
+  LibraryOwnedCheck,
 } from '@/types';
 
 const BASE = '/api';
@@ -51,27 +53,33 @@ export const searchComics = (
     `/comics/search?q=${encodeURIComponent(q)}&source=${source}&content_type=${content_type}&limit=${limit}`,
   );
 
-// ─── Watchlist ────────────────────────────────────────────────────────────────
+// ─── Request List ─────────────────────────────────────────────────────────────
 
-export const getWatchlist = (): Promise<WatchlistItem[]> => request('/watchlist');
+export const getRequests = (): Promise<RequestItem[]> => request('/requests');
 
-export const addToWatchlist = (item: Omit<SearchResult, 'isbn'> & { notes?: string }): Promise<WatchlistItem> =>
-  request('/watchlist', {
+export const addToRequestList = (item: Omit<SearchResult, 'isbn'> & { notes?: string }): Promise<RequestItem> =>
+  request('/requests', {
     method: 'POST',
     body: JSON.stringify(item),
   });
 
-export const updateWatchlistItem = (
+export const updateRequestItem = (
   id: number,
   patch: { status?: ItemStatus; notes?: string },
-): Promise<WatchlistItem> =>
-  request(`/watchlist/${id}`, {
+): Promise<RequestItem> =>
+  request(`/requests/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(patch),
   });
 
-export const removeFromWatchlist = (id: number): Promise<void> =>
-  request(`/watchlist/${id}`, { method: 'DELETE' });
+export const removeFromRequestList = (id: number): Promise<void> =>
+  request(`/requests/${id}`, { method: 'DELETE' });
+
+// Backward-compatible aliases while components are migrated.
+export const getWatchlist = getRequests;
+export const addToWatchlist = addToRequestList;
+export const updateWatchlistItem = updateRequestItem;
+export const removeFromWatchlist = removeFromRequestList;
 
 // ─── Downloads ────────────────────────────────────────────────────────────────
 
@@ -120,6 +128,16 @@ export const getCwaStatus = () => request<{ connected: boolean; error?: string; 
 export const getCwaInfo = () => request<{ cwa_url: string; ingest_folder: string; configured: boolean }>('/integrations/cwa/info');
 export const getProwlarrStatus = () => request<{ connected: boolean; error?: string; version?: string }>('/integrations/prowlarr/status');
 export const getQbittorrentStatus = () => request<{ connected: boolean; error?: string; version?: string }>('/integrations/qbittorrent/status');
+
+// ─── Library ──────────────────────────────────────────────────────────────────
+
+export const getLibraryOverview = (): Promise<LibraryOverview> => request('/library');
+
+export const checkOwnedBatch = (items: Array<{ title: string; content_type: ContentType }>) =>
+  request<{ items: LibraryOwnedCheck[] }>('/library/owned/batch', {
+    method: 'POST',
+    body: JSON.stringify({ items }),
+  });
 
 export const testKomgaConnection = (data: { url: string }) =>
   request<{ connected: boolean; error?: string; user?: string }>('/integrations/komga/test', {

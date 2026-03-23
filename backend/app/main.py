@@ -4,7 +4,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import init_db
-from app.routers import books, comics, watchlist, downloads, integrations, settings as settings_router
+from app.routers import (
+    books,
+    comics,
+    watchlist,
+    requests,
+    downloads,
+    integrations,
+    library,
+    settings as settings_router,
+)
 
 _settings = get_settings()
 
@@ -33,8 +42,10 @@ app.add_middleware(
 app.include_router(books.router, prefix="/api")
 app.include_router(comics.router, prefix="/api")
 app.include_router(watchlist.router, prefix="/api")
+app.include_router(requests.router, prefix="/api")
 app.include_router(downloads.router, prefix="/api")
 app.include_router(integrations.router, prefix="/api")
+app.include_router(library.router, prefix="/api")
 app.include_router(settings_router.router, prefix="/api")
 
 

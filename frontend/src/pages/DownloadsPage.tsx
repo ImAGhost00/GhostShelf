@@ -136,7 +136,7 @@ const DownloadsPage: React.FC = () => {
           <div className="empty-state">
             <div className="empty-icon">⬇️</div>
             <h3>No downloads yet</h3>
-            <p>Add items to your watchlist and queue downloads from there</p>
+            <p>Add items to your request list and queue downloads from there</p>
           </div>
         )}
 

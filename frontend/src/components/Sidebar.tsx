@@ -6,12 +6,13 @@ interface NavItem { to: string; icon: string; label: string; }
 const nav: NavItem[] = [
   { to: '/',           icon: '🏠', label: 'Dashboard' },
   { to: '/search',     icon: '🔍', label: 'Search' },
-  { to: '/watchlist',  icon: '👁️',  label: 'Watchlist' },
+  { to: '/requests',   icon: '📝',  label: 'Request List' },
   { to: '/downloads',  icon: '⬇️',  label: 'Downloads' },
 ];
 
 const integrations: NavItem[] = [
-  { to: '/komga',    icon: '📚', label: 'Komga' },
+  { to: '/library',  icon: '📚', label: 'Library' },
+  { to: '/komga',    icon: '🧭', label: 'Komga' },
   { to: '/settings', icon: '⚙️',  label: 'Settings' },
 ];
 

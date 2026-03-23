@@ -2,14 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   searchBooks,
   searchComics,
-  addToWatchlist,
+  addToRequestList,
   getDownloads,
-  getWatchlist,
+  getRequests,
+  checkOwnedBatch,
   startSmartAutoDownload,
 } from '@/services/api';
 import ResultCard from '@/components/ResultCard';
 import { useToast } from '@/components/ToastProvider';
-import type { SearchResult, WatchlistItem } from '@/types';
+import type { SearchResult, RequestItem } from '@/types';
 
 type Mode = 'books' | 'comics' | 'manga';
 
@@ -27,11 +28,12 @@ const SearchPage: React.FC = () => {
   const [error, setError] = useState('');
   const [processingKeys, setProcessingKeys] = useState<Set<string>>(new Set());
   const [activeDownloadKeys, setActiveDownloadKeys] = useState<Set<string>>(new Set());
-  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [requests, setRequests] = useState<RequestItem[]>([]);
+  const [ownedMap, setOwnedMap] = useState<Record<string, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    getWatchlist().then(setWatchlist).catch(() => {});
+    getRequests().then(setRequests).catch(() => {});
   }, []);
 
   const titleDownloadKey = (title: string, contentType: string) =>
@@ -56,6 +58,32 @@ const SearchPage: React.FC = () => {
     const timer = setInterval(refreshActiveDownloads, 5000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const runOwnedCheck = async () => {
+      if (results.length === 0) {
+        setOwnedMap({});
+        return;
+      }
+      try {
+        const batch = await checkOwnedBatch(
+          results.map(r => ({ title: r.title, content_type: r.content_type })),
+        );
+        const next: Record<string, string> = {};
+        for (const item of batch.items) {
+          if (item.owned && item.match) {
+            const key = titleDownloadKey(item.title, item.content_type);
+            const label = [item.match.library, item.match.source].filter(Boolean).join(' · ');
+            next[key] = label || 'Owned';
+          }
+        }
+        setOwnedMap(next);
+      } catch {
+        // Ignore ownership check failures so search remains usable.
+      }
+    };
+    runOwnedCheck();
+  }, [results]);
 
   // Reset source when mode changes
   useEffect(() => {
@@ -92,16 +120,16 @@ const SearchPage: React.FC = () => {
 
   const handleAdd = async (item: SearchResult) => {
     try {
-      const added = await addToWatchlist(item);
-      setWatchlist(prev => [...prev, added]);
-      toast(`"${item.title}" added to watchlist`, 'success');
+      const added = await addToRequestList(item);
+      setRequests(prev => [...prev, added]);
+      toast(`"${item.title}" added to request list`, 'success');
     } catch {
-      toast('Failed to add to watchlist', 'error');
+      toast('Failed to add to request list', 'error');
     }
   };
 
   const isAdded = (item: SearchResult) =>
-    watchlist.some(
+    requests.some(
       w => w.source === item.source && w.source_id === item.source_id,
     );
 
@@ -193,6 +221,7 @@ const SearchPage: React.FC = () => {
             const key = titleDownloadKey(item.title, item.content_type);
             const autoDownloading = processingKeys.has(key);
             const isActiveDownload = activeDownloadKeys.has(key);
+            const ownedLabel = ownedMap[key];
             return (
               <ResultCard
                 key={`${item.source}-${item.source_id}-${idx}`}
@@ -200,7 +229,8 @@ const SearchPage: React.FC = () => {
                 onAdd={handleAdd}
                 onAutoDownload={handleAutoDownload}
                 autoDownloading={autoDownloading}
-                downloadDisabled={autoDownloading || isActiveDownload}
+                downloadDisabled={autoDownloading || isActiveDownload || Boolean(ownedLabel)}
+                ownedLabel={ownedLabel || null}
                 alreadyAdded={isAdded(item)}
               />
             );

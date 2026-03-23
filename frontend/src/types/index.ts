@@ -14,7 +14,7 @@ export interface SearchResult {
   isbn?: string;
 }
 
-export interface WatchlistItem {
+export interface RequestItem {
   id: number;
   title: string;
   author: string | null;
@@ -30,6 +30,8 @@ export interface WatchlistItem {
   created_at: string | null;
   updated_at: string | null;
 }
+
+export type WatchlistItem = RequestItem;
 
 export interface DownloadItem {
   id: number;
@@ -54,6 +56,43 @@ export interface KomgaLibrary {
   name: string;
   root: string;
   count?: number;
+}
+
+export interface LibraryOwnedMatch {
+  source: string;
+  title: string;
+  library: string;
+}
+
+export interface LibraryOwnedCheck {
+  title: string;
+  content_type: ContentType;
+  owned: boolean;
+  match: LibraryOwnedMatch | null;
+}
+
+export interface LibraryOwnedItem {
+  source: string;
+  id: string;
+  title: string;
+  author: string;
+  content_type: ContentType;
+  library: string;
+  books_count: number;
+}
+
+export interface LibraryOverview {
+  komga: {
+    count: number;
+    items: LibraryOwnedItem[];
+    error?: string | null;
+  };
+  calibre: {
+    count: number;
+    items: LibraryOwnedItem[];
+    error?: string | null;
+  };
+  total: number;
 }
 
 export interface AppSettings {

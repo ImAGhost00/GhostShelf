@@ -17,6 +17,7 @@ from app.services.qbittorrent_service import (
     refresh_downloads as refresh_qbittorrent_downloads,
 )
 from app.services.smart_download_service import find_direct_urls
+from app.services.library_service import find_owned_match
 
 router = APIRouter(prefix="/downloads", tags=["downloads"])
 
@@ -63,6 +64,22 @@ async def _ensure_not_duplicate_active(
         raise HTTPException(
             status_code=409,
             detail=f'"{title}" is already downloading (id={existing.id})',
+        )
+
+
+async def _ensure_not_already_owned(
+    db: AsyncSession,
+    title: str,
+    content_type: ContentType,
+) -> None:
+    owned_match = await find_owned_match(db, title=title, content_type=content_type)
+    if owned_match:
+        source = owned_match.get("source") or "library"
+        library = owned_match.get("library") or ""
+        where = f" in {library}" if library else ""
+        raise HTTPException(
+            status_code=409,
+            detail=f'"{title}" appears to already exist in {source}{where}',
         )
 
 
@@ -126,6 +143,7 @@ async def list_downloads(db: AsyncSession = Depends(get_db)):
 async def queue_download(body: DownloadRequest, db: AsyncSession = Depends(get_db)):
     """Add an item to the download queue."""
     await _ensure_not_duplicate_active(db, body.title, body.content_type)
+    await _ensure_not_already_owned(db, body.title, body.content_type)
     item = DownloadItem(
         title=body.title,
         content_type=body.content_type,
@@ -144,6 +162,7 @@ async def queue_download(body: DownloadRequest, db: AsyncSession = Depends(get_d
 async def direct_download(body: DirectDownloadRequest, db: AsyncSession = Depends(get_db)):
     """Download directly from an HTTP URL or queue a torrent/magnet in qBittorrent."""
     await _ensure_not_duplicate_active(db, body.title, body.content_type)
+    await _ensure_not_already_owned(db, body.title, body.content_type)
     if _looks_like_torrent_url(body.download_url):
         result = await enqueue_qbittorrent_download(
             db=db,
@@ -195,6 +214,7 @@ async def prowlarr_search(
 async def prowlarr_auto(body: ProwlarrAutoRequest, db: AsyncSession = Depends(get_db)):
     """Search Prowlarr by title and either direct-download or queue the best release."""
     await _ensure_not_duplicate_active(db, body.title, body.content_type)
+    await _ensure_not_already_owned(db, body.title, body.content_type)
     results = await search_releases(db=db, query=body.title, content_type=body.content_type, limit=25)
     chosen = next((r for r in results if str(r.get("downloadUrl", "")).strip()), None)
     if not chosen:
@@ -222,6 +242,7 @@ async def prowlarr_auto(body: ProwlarrAutoRequest, db: AsyncSession = Depends(ge
 async def smart_auto_download(body: SmartAutoRequest, db: AsyncSession = Depends(get_db)):
     """Workflow: try Anna's Archive / Libgen first, fallback to Prowlarr indexers."""
     await _ensure_not_duplicate_active(db, body.title, body.content_type)
+    await _ensure_not_already_owned(db, body.title, body.content_type)
     direct_attempt_error: str | None = None
 
     direct_candidates = await find_direct_urls(body.title, body.content_type)
