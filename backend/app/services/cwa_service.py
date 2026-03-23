@@ -14,20 +14,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.settings_store import get_setting
 
 async def check_connection(db: AsyncSession) -> dict[str, Any]:
-    cwa_url = (await get_setting(db, "cwa_url", "")).rstrip("/")
-    cwa_ingest_folder = await get_setting(db, "cwa_ingest_folder", "")
+    cwa_url = await get_setting(db, "cwa_url", "")
+    return await check_connection_inline(cwa_url)
 
-    if not cwa_url:
+
+async def check_connection_inline(url: str) -> dict[str, Any]:
+    """Test CWA reachability using the provided URL directly."""
+    url = url.rstrip("/")
+    if not url:
         return {"connected": False, "error": "CWA URL not configured"}
-
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(cwa_url, follow_redirects=True)
-            return {
-                "connected": resp.status_code < 500,
-                "status_code": resp.status_code,
-                "ingest_folder": cwa_ingest_folder or "(not set)",
-            }
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            resp = await client.get(url)
+            connected = resp.status_code < 500
+            return {"connected": connected, "status_code": resp.status_code}
     except Exception as exc:
         return {"connected": False, "error": str(exc)}
 

@@ -118,6 +118,30 @@ export const getCwaInfo = () => request<{ cwa_url: string; ingest_folder: string
 export const getProwlarrStatus = () => request<{ connected: boolean; error?: string; version?: string }>('/integrations/prowlarr/status');
 export const getQbittorrentStatus = () => request<{ connected: boolean; error?: string; version?: string }>('/integrations/qbittorrent/status');
 
+export const testKomgaConnection = (data: { url: string; username?: string; password?: string }) =>
+  request<{ connected: boolean; error?: string; user?: string }>('/integrations/komga/test', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const testCwaConnection = (data: { url: string }) =>
+  request<{ connected: boolean; error?: string; status_code?: number }>('/integrations/cwa/test', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const testProwlarrConnection = (data: { url: string; api_key?: string }) =>
+  request<{ connected: boolean; error?: string; version?: string }>('/integrations/prowlarr/test', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const testQbittorrentConnection = (data: { url: string; username?: string; password?: string }) =>
+  request<{ connected: boolean; error?: string; version?: string }>('/integrations/qbittorrent/test', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 export const getSettings = (): Promise<AppSettings> => request('/settings');

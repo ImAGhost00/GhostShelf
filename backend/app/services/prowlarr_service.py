@@ -24,11 +24,15 @@ async def _base(db: AsyncSession) -> tuple[str, str]:
 
 async def check_connection(db: AsyncSession) -> dict[str, Any]:
     url, api_key = await _base(db)
+    return await check_connection_inline(url, api_key)
+
+
+async def check_connection_inline(url: str, api_key: str) -> dict[str, Any]:
     if not url:
         return {"connected": False, "error": "Prowlarr URL not configured"}
     if not api_key:
         return {"connected": False, "error": "Prowlarr API key not configured"}
-
+    url = url.rstrip("/")
     try:
         async with httpx.AsyncClient(timeout=12) as client:
             resp = await client.get(

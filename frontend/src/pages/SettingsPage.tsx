@@ -7,6 +7,12 @@ import {
   getProwlarrStatus,
   getQbittorrentStatus,
 } from '@/services/api';
+  import {
+    testCwaConnection,
+    testKomgaConnection,
+    testProwlarrConnection,
+    testQbittorrentConnection,
+  } from '@/services/api';
 import { useToast } from '@/components/ToastProvider';
 import type { AppSettings } from '@/types';
 
@@ -45,7 +51,7 @@ const SettingsPage: React.FC = () => {
   const testCwa = async () => {
     setCwaStatus(null);
     try {
-      const r = await getCwaStatus();
+        const r = await testCwaConnection({ url: form.cwa_url ?? '' });
       setCwaStatus(r);
     } catch {
       setCwaStatus({ connected: false, error: 'Request failed' });
@@ -55,7 +61,11 @@ const SettingsPage: React.FC = () => {
   const testKomga = async () => {
     setKomgaStatus(null);
     try {
-      const r = await getKomgaStatus();
+        const r = await testKomgaConnection({
+          url: form.komga_url ?? '',
+          username: form.komga_username ?? '',
+          password: form.komga_password ?? '',
+        });
       setKomgaStatus(r);
     } catch {
       setKomgaStatus({ connected: false, error: 'Request failed' });
@@ -65,7 +75,10 @@ const SettingsPage: React.FC = () => {
   const testProwlarr = async () => {
     setProwlarrStatus(null);
     try {
-      const r = await getProwlarrStatus();
+        const r = await testProwlarrConnection({
+          url: form.prowlarr_url ?? '',
+          api_key: form.prowlarr_api_key ?? '',
+        });
       setProwlarrStatus(r);
     } catch {
       setProwlarrStatus({ connected: false, error: 'Request failed' });
@@ -75,7 +88,11 @@ const SettingsPage: React.FC = () => {
   const testQbittorrent = async () => {
     setQbittorrentStatus(null);
     try {
-      const r = await getQbittorrentStatus();
+        const r = await testQbittorrentConnection({
+          url: form.qbittorrent_url ?? '',
+          username: form.qbittorrent_username ?? '',
+          password: form.qbittorrent_password ?? '',
+        });
       setQbittorrentStatus(r);
     } catch {
       setQbittorrentStatus({ connected: false, error: 'Request failed' });

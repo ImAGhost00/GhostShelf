@@ -9,16 +9,18 @@ from app.services.settings_store import get_setting
 
 
 async def check_connection(db: AsyncSession) -> dict[str, Any]:
-    base_url = (await get_setting(db, "qbittorrent_url", "")).rstrip("/")
+    url = await get_setting(db, "qbittorrent_url", "")
     username = await get_setting(db, "qbittorrent_username", "")
     password = await get_setting(db, "qbittorrent_password", "")
+    return await check_connection_inline(url, username, password)
 
+
+async def check_connection_inline(url: str, username: str, password: str) -> dict[str, Any]:
+    base_url = url.rstrip("/")
     if not base_url:
         return {"connected": False, "error": "qBittorrent URL not configured"}
-
     try:
         async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
-            # If credentials are set, try authenticated API login first.
             if username and password:
                 login = await client.post(
                     f"{base_url}/api/v2/auth/login",
@@ -28,7 +30,6 @@ async def check_connection(db: AsyncSession) -> dict[str, Any]:
                     return {"connected": False, "error": f"HTTP {login.status_code}"}
                 if "ok" not in login.text.lower():
                     return {"connected": False, "error": "Login failed"}
-
             version_resp = await client.get(f"{base_url}/api/v2/app/version")
             if version_resp.status_code == 200:
                 return {

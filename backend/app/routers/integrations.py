@@ -7,6 +7,7 @@ from app.services import komga_service, cwa_service, prowlarr_service, qbittorre
 from app.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
@@ -17,6 +18,26 @@ router = APIRouter(prefix="/integrations", tags=["integrations"])
 async def komga_status(db: AsyncSession = Depends(get_db)):
     """Check Komga connection."""
     return await komga_service.check_connection(db)
+
+
+class KomgaTestRequest(BaseModel):
+    url: str = ""
+    username: str = ""
+    password: str = ""
+
+
+@router.post("/komga/test")
+async def komga_test(body: KomgaTestRequest, db: AsyncSession = Depends(get_db)):
+    """Test Komga connection using inline credentials (falls back to DB for masked values)."""
+    from app.services.settings_store import get_setting
+    url = body.url or await get_setting(db, "komga_url", "")
+    username = body.username or await get_setting(db, "komga_username", "")
+    password = (
+        body.password
+        if body.password and body.password != "***"
+        else await get_setting(db, "komga_password", "")
+    )
+    return await komga_service.check_connection_inline(url, username, password)
 
 
 @router.get("/komga/libraries")
@@ -59,6 +80,18 @@ async def cwa_status(db: AsyncSession = Depends(get_db)):
     return await cwa_service.check_connection(db)
 
 
+class CwaTestRequest(BaseModel):
+    url: str = ""
+
+
+@router.post("/cwa/test")
+async def cwa_test(body: CwaTestRequest, db: AsyncSession = Depends(get_db)):
+    """Test CWA reachability using inline URL (falls back to DB if empty)."""
+    from app.services.settings_store import get_setting
+    url = body.url or await get_setting(db, "cwa_url", "")
+    return await cwa_service.check_connection_inline(url)
+
+
 @router.get("/cwa/info")
 async def cwa_info(db: AsyncSession = Depends(get_db)):
     """Return CWA ingest folder info."""
@@ -76,6 +109,27 @@ async def prowlarr_status(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+class ProwlarrTestRequest(BaseModel):
+    url: str = ""
+    api_key: str = ""
+
+
+@router.post("/prowlarr/test")
+async def prowlarr_test(body: ProwlarrTestRequest, db: AsyncSession = Depends(get_db)):
+    """Test Prowlarr connection using inline credentials (falls back to DB for masked values)."""
+    from app.services.settings_store import get_setting
+    url = body.url or await get_setting(db, "prowlarr_url", "")
+    api_key = (
+        body.api_key
+        if body.api_key and body.api_key != "***"
+        else await get_setting(db, "prowlarr_api_key", "")
+    )
+    try:
+        return await prowlarr_service.check_connection_inline(url, api_key)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 # ─── qBittorrent ──────────────────────────────────────────────────────────────
 
 @router.get("/qbittorrent/status")
@@ -83,5 +137,28 @@ async def qbittorrent_status(db: AsyncSession = Depends(get_db)):
     """Check qBittorrent connection."""
     try:
         return await qbittorrent_service.check_connection(db)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+class QbittorrentTestRequest(BaseModel):
+    url: str = ""
+    username: str = ""
+    password: str = ""
+
+
+@router.post("/qbittorrent/test")
+async def qbittorrent_test(body: QbittorrentTestRequest, db: AsyncSession = Depends(get_db)):
+    """Test qBittorrent connection using inline credentials (falls back to DB for masked values)."""
+    from app.services.settings_store import get_setting
+    url = body.url or await get_setting(db, "qbittorrent_url", "")
+    username = body.username or await get_setting(db, "qbittorrent_username", "")
+    password = (
+        body.password
+        if body.password and body.password != "***"
+        else await get_setting(db, "qbittorrent_password", "")
+    )
+    try:
+        return await qbittorrent_service.check_connection_inline(url, username, password)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

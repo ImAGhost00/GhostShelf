@@ -28,11 +28,16 @@ async def _auth(db: AsyncSession) -> tuple[str, str] | None:
 
 async def check_connection(db: AsyncSession) -> dict[str, Any]:
     komga_url = await get_setting(db, "komga_url", "")
-    if not komga_url:
-        return {"connected": False, "error": "Komga URL not configured"}
+    username = await get_setting(db, "komga_username", "")
+    password = await get_setting(db, "komga_password", "")
+    return await check_connection_inline(komga_url, username, password)
 
-    base_url = await _base_url(db)
-    auth = await _auth(db)
+
+async def check_connection_inline(url: str, username: str, password: str) -> dict[str, Any]:
+    if not url:
+        return {"connected": False, "error": "Komga URL not configured"}
+    base_url = f"{url.rstrip('/')}/api/v1"
+    auth: tuple[str, str] | None = (username, password) if username and password else None
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(f"{base_url}/users/me", auth=auth)
