@@ -67,7 +67,7 @@ def _validate_destination_path(destination: str) -> bool:
     return False
 
 
-async def _target_folder(db: AsyncSession, content_type: ContentType, explicit_destination: str | None) -> str:
+async def get_download_target_folder(db: AsyncSession, content_type: ContentType, explicit_destination: str | None) -> str:
     # If user provided a destination, validate it before using
     if explicit_destination:
         if not _validate_destination_path(explicit_destination):
@@ -119,7 +119,7 @@ async def start_direct_download(
             watchlist_item.status = ItemStatus.downloading
             await db.commit()
 
-    folder = await _target_folder(db, content_type, destination)
+    folder = await get_download_target_folder(db, content_type, destination)
     if not folder:
         download.status = "failed"
         download.error_message = "Destination folder not configured"

@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models.models import DownloadItem, ContentType
 from app.services.download_service import start_direct_download
 from app.services.prowlarr_service import search_releases
+from app.services.qbittorrent_service import enqueue_download as enqueue_qbittorrent_download
 from app.services.smart_download_service import find_direct_urls
 
 router = APIRouter(prefix="/downloads", tags=["downloads"])
@@ -86,9 +87,22 @@ async def queue_download(body: DownloadRequest, db: AsyncSession = Depends(get_d
 
 @router.post("/direct", status_code=201)
 async def direct_download(body: DirectDownloadRequest, db: AsyncSession = Depends(get_db)):
-    """Download directly from an HTTP URL into the configured ingest folder."""
+    """Download directly from an HTTP URL or queue a torrent/magnet in qBittorrent."""
+    if body.download_url.startswith("magnet:"):
+        result = await enqueue_qbittorrent_download(
+            db=db,
+            title=body.title,
+            content_type=body.content_type,
+            source_url=body.download_url,
+            watchlist_id=body.watchlist_id,
+            destination=body.destination,
+        )
+        if not result.get("ok"):
+            raise HTTPException(status_code=400, detail=result.get("error", "Download failed"))
+        return result
+
     if not body.download_url.startswith(("http://", "https://")):
-        raise HTTPException(status_code=400, detail="download_url must be http:// or https://")
+        raise HTTPException(status_code=400, detail="download_url must be http://, https://, or magnet:")
     for mirror in body.mirror_urls:
         if not mirror.startswith(("http://", "https://")):
             raise HTTPException(status_code=400, detail="All mirror URLs must be http:// or https://")
@@ -123,20 +137,33 @@ async def prowlarr_search(
 
 @router.post("/prowlarr/auto", status_code=201)
 async def prowlarr_auto(body: ProwlarrAutoRequest, db: AsyncSession = Depends(get_db)):
-    """Search Prowlarr by title and direct-download the top HTTP result."""
+    """Search Prowlarr by title and either direct-download or queue the best release."""
     results = await search_releases(db=db, query=body.title, content_type=body.content_type, limit=25)
-    chosen = next((r for r in results if str(r.get("downloadUrl", "")).startswith(("http://", "https://"))), None)
+    chosen = next((r for r in results if str(r.get("downloadUrl", "")).strip()), None)
     if not chosen:
-        raise HTTPException(status_code=404, detail="No direct HTTP result found in Prowlarr")
+        raise HTTPException(status_code=404, detail="No downloadable result found in Prowlarr")
 
-    result = await start_direct_download(
-        db=db,
-        title=body.title,
-        content_type=body.content_type,
-        download_url=chosen["downloadUrl"],
-        watchlist_id=body.watchlist_id,
-        destination=body.destination,
-    )
+    download_url = str(chosen.get("downloadUrl", "")).strip()
+
+    if download_url.startswith("magnet:"):
+        result = await enqueue_qbittorrent_download(
+            db=db,
+            title=body.title,
+            content_type=body.content_type,
+            source_url=download_url,
+            watchlist_id=body.watchlist_id,
+            destination=body.destination,
+        )
+    else:
+        result = await start_direct_download(
+            db=db,
+            title=body.title,
+            content_type=body.content_type,
+            download_url=download_url,
+            watchlist_id=body.watchlist_id,
+            destination=body.destination,
+        )
+
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result.get("error", "Download failed"))
     return {
@@ -175,21 +202,32 @@ async def smart_auto_download(body: SmartAutoRequest, db: AsyncSession = Depends
 
     # Fallback to Prowlarr indexer search when direct sources miss/fail.
     releases = await search_releases(db=db, query=body.title, content_type=body.content_type, limit=25)
-    chosen = next((r for r in releases if str(r.get("downloadUrl", "")).startswith(("http://", "https://"))), None)
+    chosen = next((r for r in releases if str(r.get("downloadUrl", "")).strip()), None)
     if not chosen:
-        detail = "No direct source found and no Prowlarr HTTP result found"
+        detail = "No direct source found and no downloadable Prowlarr result found"
         if direct_attempt_error:
             detail = f"{detail}. Direct error: {direct_attempt_error}"
         raise HTTPException(status_code=404, detail=detail)
 
-    fallback = await start_direct_download(
-        db=db,
-        title=body.title,
-        content_type=body.content_type,
-        download_url=chosen["downloadUrl"],
-        watchlist_id=body.watchlist_id,
-        destination=body.destination,
-    )
+    fallback_url = str(chosen.get("downloadUrl", "")).strip()
+    if fallback_url.startswith("magnet:"):
+        fallback = await enqueue_qbittorrent_download(
+            db=db,
+            title=body.title,
+            content_type=body.content_type,
+            source_url=fallback_url,
+            watchlist_id=body.watchlist_id,
+            destination=body.destination,
+        )
+    else:
+        fallback = await start_direct_download(
+            db=db,
+            title=body.title,
+            content_type=body.content_type,
+            download_url=fallback_url,
+            watchlist_id=body.watchlist_id,
+            destination=body.destination,
+        )
     if not fallback.get("ok"):
         raise HTTPException(status_code=400, detail=fallback.get("error", "Download failed"))
 
