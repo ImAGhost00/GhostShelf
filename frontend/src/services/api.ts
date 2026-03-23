@@ -139,13 +139,13 @@ export const checkOwnedBatch = (items: Array<{ title: string; content_type: Cont
     body: JSON.stringify({ items }),
   });
 
-export const testKomgaConnection = (data: { url: string }) =>
+export const testKomgaConnection = (data: { url: string; username?: string; password?: string }) =>
   request<{ connected: boolean; error?: string; user?: string }>('/integrations/komga/test', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 
-export const testCwaConnection = (data: { url: string }) =>
+export const testCwaConnection = (data: { url: string; username?: string; password?: string }) =>
   request<{ connected: boolean; error?: string; status_code?: number }>('/integrations/cwa/test', {
     method: 'POST',
     body: JSON.stringify(data),

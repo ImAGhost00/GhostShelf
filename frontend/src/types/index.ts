@@ -97,11 +97,16 @@ export interface LibraryOverview {
 
 export interface AppSettings {
   cwa_url?: string;
+  cwa_opds_url?: string;
+  cwa_username?: string;
+  cwa_password?: string;
   cwa_ingest_folder?: string;
   komga_ingest_folder?: string;
   comic_ingest_folder?: string;
   manga_ingest_folder?: string;
   komga_url?: string;
+  komga_username?: string;
+  komga_password?: string;
   google_books_api_key?: string;
   comicvine_api_key?: string;
   prowlarr_url?: string;

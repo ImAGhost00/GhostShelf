@@ -25,13 +25,21 @@ async def komga_status(db: AsyncSession = Depends(get_db)):
 
 class KomgaTestRequest(BaseModel):
     url: str = ""
+    username: str = ""
+    password: str = ""
 
 
 @router.post("/komga/test")
 async def komga_test(body: KomgaTestRequest, db: AsyncSession = Depends(get_db)):
     """Test Komga connection using just URL (Komga auth is via Wizarr)."""
     url = body.url or await get_setting(db, "komga_url", "")
-    return await komga_service.check_connection_inline(url)
+    username = body.username or await get_setting(db, "komga_username", "")
+    password = (
+        body.password
+        if body.password and body.password != "***"
+        else await get_setting(db, "komga_password", "")
+    )
+    return await komga_service.check_connection_inline(url, username, password)
 
 
 @router.get("/komga/libraries")
@@ -79,6 +87,8 @@ async def cwa_status(db: AsyncSession = Depends(get_db)):
 
 class CwaTestRequest(BaseModel):
     url: str = ""
+    username: str = ""
+    password: str = ""
 
 
 @router.post("/cwa/test")
@@ -86,7 +96,13 @@ async def cwa_test(body: CwaTestRequest, db: AsyncSession = Depends(get_db)):
     """Test CWA reachability using inline URL (falls back to DB if empty)."""
     from app.services.settings_store import get_setting
     url = body.url or await get_setting(db, "cwa_url", "")
-    return await cwa_service.check_connection_inline(url)
+    username = body.username or await get_setting(db, "cwa_username", "")
+    password = (
+        body.password
+        if body.password and body.password != "***"
+        else await get_setting(db, "cwa_password", "")
+    )
+    return await cwa_service.check_connection_inline(url, username, password)
 
 
 @router.get("/cwa/info")

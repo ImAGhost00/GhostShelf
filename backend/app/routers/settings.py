@@ -14,11 +14,16 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 # These are the keys that can be persisted to the DB
 ALLOWED_KEYS = {
     "cwa_url",
+    "cwa_opds_url",
+    "cwa_username",
+    "cwa_password",
     "cwa_ingest_folder",
     "komga_ingest_folder",
     "comic_ingest_folder",
     "manga_ingest_folder",
     "komga_url",
+    "komga_username",
+    "komga_password",
     "google_books_api_key",
     "comicvine_api_key",
     "prowlarr_url",

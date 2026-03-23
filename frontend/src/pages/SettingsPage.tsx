@@ -51,7 +51,11 @@ const SettingsPage: React.FC = () => {
   const testCwa = async () => {
     setCwaStatus(null);
     try {
-        const r = await testCwaConnection({ url: form.cwa_url ?? '' });
+        const r = await testCwaConnection({
+          url: form.cwa_url ?? '',
+          username: form.cwa_username ?? '',
+          password: form.cwa_password ?? '',
+        });
       setCwaStatus(r);
     } catch {
       setCwaStatus({ connected: false, error: 'Request failed' });
@@ -63,6 +67,8 @@ const SettingsPage: React.FC = () => {
     try {
       const r = await testKomgaConnection({
         url: form.komga_url ?? '',
+        username: form.komga_username ?? '',
+        password: form.komga_password ?? '',
       });
       setKomgaStatus(r);
     } catch {
@@ -122,6 +128,35 @@ const SettingsPage: React.FC = () => {
               <span className="hint">Base URL of your Calibre-Web instance</span>
             </div>
             <div className="form-field">
+              <label>OPDS URL (optional override)</label>
+              <input
+                type="url"
+                placeholder="http://localhost:8083/opds"
+                value={form.cwa_opds_url ?? ''}
+                onChange={set('cwa_opds_url')}
+              />
+              <span className="hint">Leave blank to use CWA URL + /opds automatically.</span>
+            </div>
+            <div className="form-field">
+              <label>CWA Username (optional)</label>
+              <input
+                type="text"
+                placeholder="calibre_user"
+                value={form.cwa_username ?? ''}
+                onChange={set('cwa_username')}
+              />
+              <span className="hint">Used for OPDS/library reads when your instance requires auth.</span>
+            </div>
+            <div className="form-field">
+              <label>CWA Password (optional)</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={form.cwa_password ?? ''}
+                onChange={set('cwa_password')}
+              />
+            </div>
+            <div className="form-field">
               <label>Ingest Folder Path</label>
               <input
                 type="text"
@@ -157,6 +192,25 @@ const SettingsPage: React.FC = () => {
                 placeholder="http://localhost:25600"
                 value={form.komga_url ?? ''}
                 onChange={set('komga_url')}
+              />
+            </div>
+            <div className="form-field">
+              <label>Komga Username (optional)</label>
+              <input
+                type="text"
+                placeholder="admin"
+                value={form.komga_username ?? ''}
+                onChange={set('komga_username')}
+              />
+              <span className="hint">Needed if your Komga API is not exposed through Wizarr session auth.</span>
+            </div>
+            <div className="form-field">
+              <label>Komga Password (optional)</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={form.komga_password ?? ''}
+                onChange={set('komga_password')}
               />
             </div>
             <div className="form-field">
